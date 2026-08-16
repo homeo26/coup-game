@@ -1,0 +1,890 @@
+/**
+ * GameScreen — the Coup table.
+ *
+ * Layout (portrait): header (leave / room code / court count), the log
+ * strip, opponent seats, then my area: hand, coins, and a context panel
+ * that morphs by phase — action bar on my turn, challenge/block prompts
+ * when I owe a response, card-loss picker, exchange picker, and a win
+ * overlay at game end. Everything animates with short fades/springs.
+ */
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, Modal, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import Animated, { FadeIn, FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import { Theme, font, latinFont, roleColors, useStyles, useTheme } from '../theme';
+import { Pressy } from '../components/Pressy';
+import { InfluenceCard } from '../components/InfluenceCard';
+import { CoinCount, CoinIcon } from '../components/Coin';
+import { RoleArt } from '../components/RoleArt';
+import { MessageSheet, SheetMessage } from '../components/MessageSheet';
+import { useRoom } from '../net/RoomContext';
+import { useSettings } from '../settings';
+import { influence, isAlive, pendingResponders } from '../engine/engine';
+import {
+  ACTION_ROLE,
+  ActionType,
+  BLOCK_ROLES,
+  GameState,
+  LogEntry,
+  PlayerState,
+  Role,
+} from '../engine/types';
+import { t, TKey, isRTL } from '../i18n';
+import * as haptics from '../haptics';
+
+/* ------------------------------------------------------------------ */
+/* Log formatting                                                      */
+/* ------------------------------------------------------------------ */
+
+const ACTION_LABEL: Record<ActionType, TKey> = {
+  income: 'income',
+  foreign_aid: 'foreign_aid',
+  coup: 'coupAction',
+  tax: 'tax',
+  assassinate: 'assassinate',
+  steal: 'steal',
+  exchange: 'exchange',
+};
+
+function formatLog(e: LogEntry): string {
+  const params: Record<string, string | number> = { ...(e.params ?? {}) };
+  if (typeof params.r === 'string' && params.r in roleColors) {
+    params.r = t(params.r as TKey);
+  }
+  if (typeof params.act === 'string' && params.act in ACTION_LABEL) {
+    params.act = t(ACTION_LABEL[params.act as ActionType]);
+  }
+  return t(e.key as TKey, params);
+}
+
+/* ------------------------------------------------------------------ */
+/* Opponent seat                                                       */
+/* ------------------------------------------------------------------ */
+
+function Seat({
+  p,
+  isTurn,
+  responding,
+  targetable,
+  onTarget,
+  width,
+}: {
+  p: PlayerState;
+  isTurn: boolean;
+  responding: boolean;
+  targetable: boolean;
+  onTarget: () => void;
+  width: number;
+}) {
+  const theme = useTheme();
+  const styles = useStyles(makeStyles);
+  const dead = !isAlive(p);
+  return (
+    <Pressy
+      scaleTo={0.95}
+      disabled={!targetable}
+      onPress={onTarget}
+      style={[
+        styles.seat,
+        { width },
+        isTurn && styles.seatTurn,
+        targetable && styles.seatTargetable,
+        dead && styles.seatDead,
+      ]}
+    >
+      <View style={styles.seatHead}>
+        <Text style={styles.seatName} numberOfLines={1}>
+          {p.name}
+        </Text>
+        {responding ? (
+          <Ionicons name="hourglass-outline" size={13} color={theme.colors.warning} />
+        ) : null}
+      </View>
+      <View style={styles.seatCards}>
+        {p.cards.map((c, i) =>
+          c.revealed ? (
+            <InfluenceCard key={i} role={c.role} dead width={34} />
+          ) : (
+            <InfluenceCard key={i} width={34} />
+          ),
+        )}
+      </View>
+      {dead ? (
+        <Text style={styles.deadLabel}>{t('eliminated')}</Text>
+      ) : (
+        <CoinCount amount={p.coins} size={15} />
+      )}
+      {targetable ? (
+        <View style={styles.targetRing}>
+          <Ionicons name="locate" size={15} color={theme.colors.danger} />
+        </View>
+      ) : null}
+    </Pressy>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Main screen                                                         */
+/* ------------------------------------------------------------------ */
+
+export function GameScreen() {
+  const theme = useTheme();
+  const styles = useStyles(makeStyles);
+  const { width } = useWindowDimensions();
+  const { lang } = useSettings();
+  const { room, myId, move, leave, again } = useRoom();
+  const [targeting, setTargeting] = useState<ActionType | null>(null);
+  const [loseIdx, setLoseIdx] = useState<number | null>(null);
+  const [keepIdxs, setKeepIdxs] = useState<number[]>([]);
+  const [sending, setSending] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [notice, setNotice] = useState<SheetMessage | null>(null);
+  void lang;
+
+  const g = room?.game as GameState | undefined;
+
+  // Derivations (safe even while g flickers during snapshots)
+  const me = useMemo(() => g?.players.find((p) => p.id === myId), [g, myId]);
+  const responders = useMemo(() => (g ? pendingResponders(g) : []), [g]);
+  const current = g ? g.players[g.turn] : undefined;
+  const isMyTurn = !!(g && me && current?.id === me.id && g.phase === 'action');
+  const iRespond = !!(me && responders.includes(me.id));
+  const iLose = !!(g && me && g.phase === 'lose_card' && g.lossQueue[0]?.playerId === me.id);
+  const iExchange = !!(g && me && g.phase === 'exchange' && g.pending?.actor === me.id);
+  const mustCoup = isMyTurn && !!me && me.coins >= 10;
+  const needsMe = isMyTurn || iRespond || iLose || iExchange;
+
+  // A gentle nudge when the game starts waiting on me
+  const needed = useRef(false);
+  useEffect(() => {
+    if (needsMe && !needed.current) haptics.medium();
+    needed.current = needsMe;
+  }, [needsMe]);
+
+  // Reset transient selections when the phase moves on
+  useEffect(() => {
+    setTargeting(null);
+    setLoseIdx(null);
+    setKeepIdxs([]);
+  }, [g?.version]);
+
+  if (!g || !me) return null;
+  const rtl = isRTL();
+  const opponents = g.players.filter((p) => p.id !== me.id);
+  const seatW = Math.floor((width - 40 - 8 * 2) / Math.min(3, Math.max(2, opponents.length)));
+
+  const dispatch = async (m: Parameters<typeof move>[0]) => {
+    if (sending) return;
+    setSending(true);
+    try {
+      haptics.light();
+      const err = await move(m);
+      if (err) console.log('move rejected:', err);
+    } catch {
+      setNotice({ icon: 'cloud-offline-outline', title: t('appName'), body: t('offline') });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const declare = (action: ActionType) => {
+    const needsTarget = action === 'coup' || action === 'assassinate' || action === 'steal';
+    if (needsTarget) {
+      haptics.selection();
+      setTargeting(action);
+    } else {
+      dispatch({ type: 'declare', action });
+    }
+  };
+
+  const onLeave = () => {
+    setNotice({
+      icon: 'exit-outline',
+      title: t('leaveGameTitle'),
+      body: t('leaveGameBody'),
+      actionLabel: t('leave'),
+      destructive: true,
+      onAction: () => leave(),
+    });
+  };
+
+  /* ----- context panel by phase ----- */
+
+  const pending = g.pending;
+  const actorName = pending ? g.players.find((p) => p.id === pending.actor)?.name ?? '' : '';
+  const targetName = pending?.target
+    ? g.players.find((p) => p.id === pending.target)?.name ?? ''
+    : '';
+
+  let panel: React.ReactNode = null;
+
+  if (g.phase === 'game_over') {
+    panel = null; // overlay below
+  } else if (targeting) {
+    panel = (
+      <Animated.View entering={FadeInUp.duration(200)} style={styles.panel}>
+        <Text style={styles.panelTitle}>{t('chooseTarget')}</Text>
+        <Pressy scaleTo={0.94} style={styles.neutralBtn} onPress={() => setTargeting(null)}>
+          <Text style={styles.neutralBtnText}>{t('cancel')}</Text>
+        </Pressy>
+      </Animated.View>
+    );
+  } else if (isMyTurn) {
+    const canA = (cost: number) => me.coins >= cost && !sending;
+    const actions: { a: ActionType; label: TKey; desc: TKey; cost?: number; role?: Role }[] = [
+      { a: 'income', label: 'income', desc: 'incomeDesc' },
+      { a: 'foreign_aid', label: 'foreign_aid', desc: 'foreignAidDesc' },
+      { a: 'tax', label: 'tax', desc: 'taxDesc', role: 'duke' },
+      { a: 'steal', label: 'steal', desc: 'stealDesc', role: 'captain' },
+      { a: 'exchange', label: 'exchange', desc: 'exchangeDesc', role: 'ambassador' },
+      { a: 'assassinate', label: 'assassinate', desc: 'assassinateDesc', cost: 3, role: 'assassin' },
+      { a: 'coup', label: 'coupAction', desc: 'coupDesc', cost: 7 },
+    ];
+    panel = (
+      <Animated.View entering={FadeInUp.duration(220)} style={styles.panel}>
+        <Text style={styles.panelTitle}>
+          {mustCoup ? t('mustCoup') : t('yourTurn')}
+        </Text>
+        <View style={styles.actionGrid}>
+          {actions.map(({ a, label, cost, role }) => {
+            const disabled =
+              sending ||
+              (cost !== undefined && me.coins < cost) ||
+              (mustCoup && a !== 'coup') ||
+              // steal needs someone with coins; coup/assassinate need a live target
+              ((a === 'steal' || a === 'coup' || a === 'assassinate') &&
+                !opponents.some((o) => isAlive(o) && (a !== 'steal' || o.coins > 0)));
+            return (
+              <Pressy
+                key={a}
+                scaleTo={0.92}
+                disabled={disabled}
+                onPress={() => declare(a)}
+                style={[
+                  styles.actionChip,
+                  role ? { borderColor: roleColors[role] + '88' } : null,
+                  a === 'coup' ? styles.coupChip : null,
+                  disabled && styles.chipDisabled,
+                ]}
+              >
+                {role ? (
+                  <RoleArt role={role} size={17} />
+                ) : (
+                  <Ionicons
+                    name={a === 'coup' ? 'skull' : a === 'income' ? 'add' : 'cash-outline'}
+                    size={16}
+                    color={a === 'coup' ? theme.colors.danger : theme.colors.goldLight}
+                  />
+                )}
+                <Text style={styles.chipLabel}>{t(label)}</Text>
+                {cost !== undefined ? (
+                  <View style={styles.costTag}>
+                    <CoinIcon size={11} />
+                    <Text style={styles.costText}>{cost}</Text>
+                  </View>
+                ) : null}
+              </Pressy>
+            );
+          })}
+        </View>
+      </Animated.View>
+    );
+  } else if (iRespond && pending) {
+    const isBlockChallenge = g.phase === 'block_challenge';
+    const claimer = isBlockChallenge
+      ? g.players.find((p) => p.id === pending.block!.blocker)?.name ?? ''
+      : actorName;
+    const claimedRole = isBlockChallenge ? pending.block!.role : pending.claimedRole;
+    const actionLabel = t(ACTION_LABEL[pending.action]);
+    const blockRoles = g.phase === 'block' ? BLOCK_ROLES[pending.action] ?? [] : [];
+
+    panel = (
+      <Animated.View entering={FadeInUp.duration(220)} style={styles.panel}>
+        <Text style={styles.panelTitle}>
+          {g.phase === 'block'
+            ? `${t('declares', { name: actorName, action: actionLabel })}${
+                targetName ? ` — ${t('onPlayer', { name: targetName })}` : ''
+              }`
+            : t('claims', { name: claimer, role: t((claimedRole ?? 'duke') as TKey) })}
+        </Text>
+        {g.phase !== 'block' ? (
+          <Text style={styles.panelSub}>
+            {t('declares', { name: actorName, action: actionLabel })}
+            {targetName ? ` — ${t('onPlayer', { name: targetName })}` : ''}
+          </Text>
+        ) : null}
+        <View style={[styles.btnRow, rtl && styles.rowReverse]}>
+          {g.phase === 'block' ? (
+            blockRoles.map((r) => (
+              <Pressy
+                key={r}
+                scaleTo={0.94}
+                disabled={sending}
+                style={[styles.blockBtn, { borderColor: roleColors[r] }]}
+                onPress={() => dispatch({ type: 'block', role: r })}
+              >
+                <RoleArt role={r} size={18} />
+                <Text style={[styles.blockBtnText, { color: roleColors[r] }]}>
+                  {t('blockWith', { role: t(r as TKey) })}
+                </Text>
+              </Pressy>
+            ))
+          ) : (
+            <Pressy
+              scaleTo={0.94}
+              disabled={sending}
+              style={styles.challengeBtn}
+              onPress={() => dispatch({ type: 'challenge' })}
+            >
+              <Ionicons name="flash" size={17} color="#fff" />
+              <Text style={styles.challengeBtnText}>{t('challenge')}</Text>
+            </Pressy>
+          )}
+          <Pressy
+            scaleTo={0.94}
+            disabled={sending}
+            style={styles.neutralBtn}
+            onPress={() => dispatch({ type: 'pass' })}
+          >
+            <Text style={styles.neutralBtnText}>{t('allow')}</Text>
+          </Pressy>
+        </View>
+      </Animated.View>
+    );
+  } else if (iLose) {
+    panel = (
+      <Animated.View entering={FadeInUp.duration(220)} style={styles.panel}>
+        <Text style={[styles.panelTitle, { color: theme.colors.danger }]}>
+          {t('loseCardTitle')}
+        </Text>
+        {loseIdx !== null ? (
+          <Pressy
+            scaleTo={0.94}
+            disabled={sending}
+            style={styles.dangerBtn}
+            onPress={() => dispatch({ type: 'lose', cardIndex: loseIdx })}
+          >
+            <Text style={styles.challengeBtnText}>{t('confirm')}</Text>
+          </Pressy>
+        ) : null}
+      </Animated.View>
+    );
+  } else if (iExchange && pending?.drawn) {
+    const unrevealed = me.cards.map((c, i) => ({ c, i })).filter(({ c }) => !c.revealed);
+    const pool: Role[] = [...unrevealed.map(({ c }) => c.role), ...pending.drawn];
+    const need = unrevealed.length;
+    const toggle = (i: number) => {
+      haptics.selection();
+      setKeepIdxs((prev) =>
+        prev.includes(i) ? prev.filter((x) => x !== i) : prev.length < need ? [...prev, i] : prev,
+      );
+    };
+    panel = (
+      <Animated.View entering={FadeInUp.duration(220)} style={styles.panel}>
+        <Text style={styles.panelTitle}>{t('exchangeTitle', { n: need })}</Text>
+        <View style={styles.exchangeRow}>
+          {pool.map((r, i) => (
+            <Pressy key={i} scaleTo={0.93} onPress={() => toggle(i)}>
+              <InfluenceCard role={r} width={64} selected={keepIdxs.includes(i)} />
+            </Pressy>
+          ))}
+        </View>
+        <Pressy
+          scaleTo={0.94}
+          disabled={keepIdxs.length !== need || sending}
+          style={[styles.goldBtn, keepIdxs.length !== need && styles.chipDisabled]}
+          onPress={() => dispatch({ type: 'exchange_keep', keep: keepIdxs })}
+        >
+          <Text style={styles.goldBtnText}>{t('confirm')}</Text>
+        </Pressy>
+      </Animated.View>
+    );
+  } else {
+    // Waiting on someone else
+    const label =
+      g.phase === 'action' && current
+        ? t('turnOf', { name: current.name })
+        : t('waitingOthers');
+    panel = (
+      <Animated.View entering={FadeIn.duration(200)} style={styles.panel}>
+        <View style={[styles.waitRow, rtl && styles.rowReverse]}>
+          <Ionicons name="hourglass-outline" size={15} color={theme.colors.inkSoft} />
+          <Text style={styles.waitText}>{label}</Text>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  const targetable = (p: PlayerState) =>
+    !!targeting && isAlive(p) && (targeting !== 'steal' || p.coins > 0);
+
+  const winner = g.winner ? g.players.find((p) => p.id === g.winner) : null;
+  const latestLog = g.log.length > 0 ? g.log[g.log.length - 1] : null;
+
+  return (
+    <SafeAreaView style={styles.root} edges={['top']}>
+      {/* Header */}
+      <View style={[styles.header, rtl && styles.rowReverse]}>
+        <Pressy scaleTo={0.85} style={styles.iconBtn} onPress={onLeave} hitSlop={8}>
+          <Ionicons name="exit-outline" size={19} color={theme.colors.danger} />
+        </Pressy>
+        <Text style={styles.roomCode}>{room!.code}</Text>
+        <View style={[styles.deckChip, rtl && styles.rowReverse]}>
+          <Ionicons name="albums-outline" size={14} color={theme.colors.inkSoft} />
+          <Text style={styles.deckText}>{g.deck.length}</Text>
+        </View>
+      </View>
+
+      {/* Log strip */}
+      <Pressy scaleTo={0.98} style={styles.logStrip} onPress={() => setLogOpen(true)}>
+        <Ionicons name="chatbox-ellipses-outline" size={14} color={theme.colors.goldDark} />
+        <Text style={[styles.logText, rtl && styles.rtlText]} numberOfLines={1}>
+          {latestLog ? formatLog(latestLog) : '—'}
+        </Text>
+      </Pressy>
+
+      {/* Opponents */}
+      <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={styles.seats} horizontal={false}>
+        <View style={styles.seatWrap}>
+          {opponents.map((p) => (
+            <Seat
+              key={p.id}
+              p={p}
+              width={seatW}
+              isTurn={current?.id === p.id && g.phase !== 'game_over'}
+              responding={responders.includes(p.id)}
+              targetable={targetable(p)}
+              onTarget={() => {
+                if (!targeting) return;
+                const action = targeting;
+                setTargeting(null);
+                dispatch({ type: 'declare', action, target: p.id });
+              }}
+            />
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* My area */}
+      <View style={styles.myArea}>
+        <View style={[styles.myHead, rtl && styles.rowReverse]}>
+          <Text style={styles.myName}>{me.name}</Text>
+          <CoinCount amount={me.coins} size={20} />
+        </View>
+        <View style={styles.hand}>
+          {me.cards.map((c, i) => (
+            <Pressy
+              key={i}
+              scaleTo={0.95}
+              disabled={!iLose || c.revealed}
+              onPress={() => {
+                haptics.selection();
+                setLoseIdx(i);
+              }}
+            >
+              <InfluenceCard
+                role={c.role}
+                dead={c.revealed}
+                width={92}
+                selected={iLose && loseIdx === i}
+              />
+            </Pressy>
+          ))}
+        </View>
+        <Animated.View layout={LinearTransition.springify().damping(19)}>{panel}</Animated.View>
+      </View>
+
+      {/* Win overlay */}
+      {g.phase === 'game_over' && winner ? (
+        <Animated.View entering={FadeIn.duration(350)} style={styles.winOverlay}>
+          <Animated.View entering={FadeInDown.duration(400).delay(120)} style={styles.winCard}>
+            <Ionicons name="trophy" size={54} color={theme.colors.gold} />
+            <Text style={styles.winTitle}>
+              {winner.id === me.id ? t('youWin') : t('winnerIs', { name: winner.name })}
+            </Text>
+            {room!.hostId === me.id ? (
+              <Pressy scaleTo={0.95} style={styles.goldBtn} onPress={() => again()}>
+                <Text style={styles.goldBtnText}>{t('playAgain')}</Text>
+              </Pressy>
+            ) : null}
+            <Pressy scaleTo={0.95} style={styles.neutralBtn} onPress={() => leave()}>
+              <Text style={styles.neutralBtnText}>{t('backHome')}</Text>
+            </Pressy>
+          </Animated.View>
+        </Animated.View>
+      ) : null}
+
+      {/* Full log */}
+      <Modal visible={logOpen} transparent animationType="fade" onRequestClose={() => setLogOpen(false)}>
+        <View style={styles.logModalBackdrop}>
+          <View style={styles.logModal}>
+            <FlatList
+              data={[...g.log].reverse()}
+              keyExtractor={(_, i) => String(i)}
+              renderItem={({ item }) => (
+                <Text style={[styles.logLine, rtl && styles.rtlText]}>{formatLog(item)}</Text>
+              )}
+            />
+            <Pressy scaleTo={0.95} style={styles.neutralBtn} onPress={() => setLogOpen(false)}>
+              <Text style={styles.neutralBtnText}>{t('ok')}</Text>
+            </Pressy>
+          </View>
+        </View>
+      </Modal>
+
+      <MessageSheet message={notice} onClose={() => setNotice(null)} />
+    </SafeAreaView>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    rowReverse: { flexDirection: 'row-reverse' },
+    rtlText: { textAlign: 'right', writingDirection: 'rtl' },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 4,
+    },
+    iconBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.colors.surfaceHover,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    roomCode: {
+      fontSize: 16,
+      fontFamily: latinFont('bold'),
+      letterSpacing: 6,
+      color: theme.colors.goldLight,
+    },
+    deckChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 10,
+      height: 30,
+    },
+    deckText: {
+      fontSize: 13,
+      fontFamily: latinFont('bold'),
+      color: theme.colors.inkSoft,
+    },
+    logStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginHorizontal: 16,
+      marginTop: 8,
+      paddingHorizontal: 12,
+      height: 34,
+      borderRadius: theme.radius.sm,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    logText: {
+      flex: 1,
+      fontSize: 12,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
+    },
+    seats: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+    },
+    seatWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      justifyContent: 'center',
+    },
+    seat: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.md,
+      borderWidth: 1.5,
+      borderColor: theme.colors.border,
+      alignItems: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 6,
+      gap: 6,
+    },
+    seatTurn: {
+      borderColor: theme.colors.gold,
+      ...theme.shadow.goldGlow,
+    },
+    seatTargetable: {
+      borderColor: theme.colors.danger,
+    },
+    seatDead: {
+      opacity: 0.55,
+    },
+    seatHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      maxWidth: '100%',
+      paddingHorizontal: 2,
+    },
+    seatName: {
+      fontSize: 12.5,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+      flexShrink: 1,
+    },
+    seatCards: {
+      flexDirection: 'row',
+      gap: 4,
+    },
+    deadLabel: {
+      fontSize: 10,
+      fontFamily: font('bold'),
+      color: theme.colors.danger,
+    },
+    targetRing: {
+      position: 'absolute',
+      top: 6,
+      right: 6,
+    },
+    myArea: {
+      marginTop: 'auto',
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      paddingTop: 10,
+      paddingBottom: 8,
+      paddingHorizontal: 16,
+      gap: 10,
+    },
+    myHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    myName: {
+      fontSize: 15,
+      fontFamily: font('black'),
+      color: theme.colors.ink,
+    },
+    hand: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 12,
+    },
+    panel: {
+      backgroundColor: theme.colors.surfaceElevated,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 12,
+      gap: 10,
+      minHeight: 58,
+      justifyContent: 'center',
+    },
+    panelTitle: {
+      fontSize: 14,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+      textAlign: 'center',
+    },
+    panelSub: {
+      fontSize: 12,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
+      textAlign: 'center',
+      marginTop: -6,
+    },
+    actionGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      justifyContent: 'center',
+    },
+    actionChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1.5,
+      borderColor: theme.colors.borderBright,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 12,
+      height: 40,
+    },
+    coupChip: {
+      borderColor: theme.colors.danger,
+    },
+    chipDisabled: {
+      opacity: 0.35,
+    },
+    chipLabel: {
+      fontSize: 13,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+    },
+    costTag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+    },
+    costText: {
+      fontSize: 11,
+      fontFamily: latinFont('bold'),
+      color: theme.colors.goldLight,
+    },
+    btnRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      justifyContent: 'center',
+    },
+    challengeBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: theme.colors.danger,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: 20,
+      height: 46,
+      justifyContent: 'center',
+    },
+    challengeBtnText: {
+      fontSize: 14,
+      fontFamily: font('bold'),
+      color: '#fff',
+    },
+    dangerBtn: {
+      backgroundColor: theme.colors.danger,
+      borderRadius: theme.radius.md,
+      height: 46,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    blockBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderWidth: 1.5,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: 14,
+      height: 46,
+      justifyContent: 'center',
+    },
+    blockBtnText: {
+      fontSize: 13,
+      fontFamily: font('bold'),
+    },
+    neutralBtn: {
+      backgroundColor: theme.colors.surfaceHover,
+      borderWidth: 1,
+      borderColor: theme.colors.borderBright,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: 20,
+      height: 46,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    neutralBtnText: {
+      fontSize: 14,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+    },
+    goldBtn: {
+      backgroundColor: theme.colors.gold,
+      borderRadius: theme.radius.md,
+      height: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+      alignSelf: 'stretch',
+      paddingHorizontal: 20,
+    },
+    goldBtnText: {
+      fontSize: 15,
+      fontFamily: font('bold'),
+      color: theme.colors.inkOnGold,
+    },
+    exchangeRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      justifyContent: 'center',
+    },
+    waitRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    waitText: {
+      fontSize: 13,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
+    },
+    winOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(10, 8, 6, 0.88)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 28,
+    },
+    winCard: {
+      alignSelf: 'stretch',
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.xl,
+      borderWidth: 1,
+      borderColor: theme.colors.borderBright,
+      alignItems: 'center',
+      padding: 26,
+      gap: 14,
+      ...theme.shadow.card,
+    },
+    winTitle: {
+      fontSize: 22,
+      fontFamily: font('black'),
+      color: theme.colors.goldLight,
+      textAlign: 'center',
+    },
+    logModalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'center',
+      padding: 24,
+    },
+    logModal: {
+      maxHeight: '70%',
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.borderBright,
+      padding: 16,
+      gap: 10,
+    },
+    logLine: {
+      fontSize: 13,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
+      paddingVertical: 5,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+  });

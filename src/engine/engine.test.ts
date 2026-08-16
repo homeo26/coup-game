@@ -1,0 +1,458 @@
+/**
+ * Engine tests — run with `npm test` (tsx).
+ * Covers every action, block, challenge branch, coin semantics, the
+ * 10-coin rule, steal-from-1-coin, double-loss assassination, exchange,
+ * elimination ordering, forfeits, and win detection.
+ */
+import {
+  apply,
+  influence,
+  isAlive,
+  newGame,
+  pendingResponders,
+} from './engine';
+import { GameState, Move, Role } from './types';
+
+let passed = 0;
+let failed = 0;
+
+function assert(cond: boolean, msg: string) {
+  if (cond) {
+    passed++;
+  } else {
+    failed++;
+    console.error('  ✗', msg);
+  }
+}
+
+function eq<T>(actual: T, expected: T, msg: string) {
+  assert(
+    JSON.stringify(actual) === JSON.stringify(expected),
+    `${msg} (expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)})`,
+  );
+}
+
+function test(name: string, fn: () => void) {
+  const before = failed;
+  try {
+    fn();
+  } catch (e) {
+    failed++;
+    console.error('  ✗ threw:', e);
+  }
+  console.log(`${failed === before ? '✓' : '✗'} ${name}`);
+}
+
+/** Build a game with fixed hands and deck for deterministic tests. */
+function rig(
+  hands: Record<string, [Role, Role]>,
+  deck: Role[],
+  coins?: Record<string, number>,
+): GameState {
+  const ids = Object.keys(hands);
+  const s = newGame(
+    ids.map((id) => ({ id, name: id.toUpperCase() })),
+    () => 0.5,
+  );
+  s.players.forEach((p) => {
+    p.cards = hands[p.id].map((role) => ({ role, revealed: false }));
+    if (coins && coins[p.id] !== undefined) p.coins = coins[p.id];
+  });
+  s.deck = [...deck];
+  return s;
+}
+
+function mv(s: GameState, id: string, move: Move): GameState {
+  const r = apply(s, id, move);
+  if (r.error) throw new Error(`unexpected error: ${r.error} for ${id} ${JSON.stringify(move)}`);
+  return r.state;
+}
+
+function expectError(s: GameState, id: string, move: Move, msg: string) {
+  const r = apply(s, id, move);
+  assert(!!r.error, `${msg} — should have errored`);
+  return r;
+}
+
+const P = (s: GameState, id: string) => s.players.find((p) => p.id === id)!;
+
+/* ------------------------------------------------------------------ */
+
+test('setup deals 2 cards & 2 coins each, 15 cards total', () => {
+  const s = newGame([
+    { id: 'a', name: 'A' },
+    { id: 'b', name: 'B' },
+    { id: 'c', name: 'C' },
+  ]);
+  eq(s.players.length, 3, 'three players');
+  s.players.forEach((p) => {
+    eq(p.cards.length, 2, 'two cards');
+    eq(p.coins, 2, 'two coins');
+  });
+  eq(s.deck.length, 15 - 6, 'court deck 9');
+  eq(s.phase, 'action', 'starts awaiting action');
+});
+
+test('income: +1, no window, next turn', () => {
+  let s = rig({ a: ['duke', 'contessa'], b: ['captain', 'captain'] }, ['assassin']);
+  s = mv(s, 'a', { type: 'declare', action: 'income' });
+  eq(P(s, 'a').coins, 3, 'a has 3');
+  eq(s.players[s.turn].id, 'b', "b's turn");
+  eq(s.phase, 'action', 'action phase');
+});
+
+test('foreign aid: unblocked gives +2 after all pass', () => {
+  let s = rig(
+    { a: ['duke', 'contessa'], b: ['captain', 'captain'], c: ['assassin', 'ambassador'] },
+    ['duke'],
+  );
+  s = mv(s, 'a', { type: 'declare', action: 'foreign_aid' });
+  eq(s.phase, 'block', 'block window');
+  eq(pendingResponders(s).sort(), ['b', 'c'], 'b and c may block');
+  s = mv(s, 'b', { type: 'pass' });
+  s = mv(s, 'c', { type: 'pass' });
+  eq(P(s, 'a').coins, 4, 'a has 4');
+  eq(s.players[s.turn].id, 'b', "b's turn");
+});
+
+test('foreign aid blocked by unchallenged duke claim: no coins', () => {
+  let s = rig({ a: ['contessa', 'contessa'], b: ['captain', 'captain'] }, ['duke']);
+  s = mv(s, 'a', { type: 'declare', action: 'foreign_aid' });
+  s = mv(s, 'b', { type: 'block', role: 'duke' }); // bluff, but unchallenged
+  eq(s.phase, 'block_challenge', 'block challenge window');
+  eq(pendingResponders(s), ['a'], 'a may challenge the block');
+  s = mv(s, 'a', { type: 'pass' });
+  eq(P(s, 'a').coins, 2, 'a still 2');
+  eq(s.players[s.turn].id, 'b', 'turn advanced');
+});
+
+test('foreign aid block challenged, blocker HAD duke: challenger loses card, blocker redraws', () => {
+  let s = rig({ a: ['contessa', 'contessa'], b: ['duke', 'captain'] }, ['ambassador', 'assassin']);
+  s = mv(s, 'a', { type: 'declare', action: 'foreign_aid' });
+  s = mv(s, 'b', { type: 'block', role: 'duke' });
+  s = mv(s, 'a', { type: 'challenge' });
+  // a must now lose a card (has 2 → chooses)
+  eq(s.phase, 'lose_card', 'a chooses a loss');
+  s = mv(s, 'a', { type: 'lose', cardIndex: 0 });
+  eq(influence(P(s, 'a')), 1, 'a down to 1');
+  // b's duke was returned & replaced — hand size still 2 unrevealed
+  eq(influence(P(s, 'b')), 2, 'b keeps 2');
+  eq(P(s, 'a').coins, 2, 'aid denied');
+  eq(s.deck.length, 2, 'deck same size (1 in, 1 out)');
+});
+
+test('foreign aid block challenged, blocker bluffed: blocker loses card, aid resolves', () => {
+  let s = rig({ a: ['contessa', 'contessa'], b: ['captain', 'captain'] }, ['duke']);
+  s = mv(s, 'a', { type: 'declare', action: 'foreign_aid' });
+  s = mv(s, 'b', { type: 'block', role: 'duke' });
+  s = mv(s, 'a', { type: 'challenge' });
+  eq(s.phase, 'lose_card', 'b chooses a loss');
+  s = mv(s, 'b', { type: 'lose', cardIndex: 1 });
+  eq(influence(P(s, 'b')), 1, 'b down to 1');
+  eq(P(s, 'a').coins, 4, 'aid went through');
+});
+
+test('tax unchallenged: +3', () => {
+  let s = rig({ a: ['duke', 'contessa'], b: ['captain', 'captain'] }, ['duke']);
+  s = mv(s, 'a', { type: 'declare', action: 'tax' });
+  eq(s.phase, 'action_challenge', 'challenge window');
+  s = mv(s, 'b', { type: 'pass' });
+  eq(P(s, 'a').coins, 5, 'a has 5');
+});
+
+test('tax challenged with real duke: challenger loses, tax resolves, duke reshuffled', () => {
+  let s = rig({ a: ['duke', 'contessa'], b: ['captain', 'captain'] }, ['ambassador', 'assassin']);
+  s = mv(s, 'a', { type: 'declare', action: 'tax' });
+  s = mv(s, 'b', { type: 'challenge' });
+  s = mv(s, 'b', { type: 'lose', cardIndex: 0 });
+  eq(P(s, 'a').coins, 5, 'tax collected');
+  eq(influence(P(s, 'b')), 1, 'challenger lost a card');
+  eq(s.deck.length, 2, 'deck size unchanged (1 returned, 1 drawn)');
+  eq(influence(P(s, 'a')), 2, 'a keeps 2 influence after the swap');
+});
+
+test('tax challenged on a bluff: actor loses card, no coins', () => {
+  let s = rig({ a: ['contessa', 'assassin'], b: ['captain', 'captain'] }, ['duke']);
+  s = mv(s, 'a', { type: 'declare', action: 'tax' });
+  s = mv(s, 'b', { type: 'challenge' });
+  eq(s.phase, 'lose_card', 'a must lose');
+  s = mv(s, 'a', { type: 'lose', cardIndex: 0 });
+  eq(P(s, 'a').coins, 2, 'no tax');
+  eq(influence(P(s, 'a')), 1, 'a lost a card');
+  eq(s.players[s.turn].id, 'b', 'turn advanced');
+});
+
+test('steal: takes 2, blockable by captain or ambassador', () => {
+  let s = rig({ a: ['captain', 'contessa'], b: ['captain', 'duke'] }, ['duke'], { a: 2, b: 5 });
+  s = mv(s, 'a', { type: 'declare', action: 'steal', target: 'b' });
+  s = mv(s, 'b', { type: 'pass' }); // no challenge
+  eq(s.phase, 'block', 'block window for target');
+  eq(pendingResponders(s), ['b'], 'only target may block');
+  s = mv(s, 'b', { type: 'pass' });
+  eq(P(s, 'a').coins, 4, 'a took 2');
+  eq(P(s, 'b').coins, 3, 'b lost 2');
+});
+
+test('steal from a player with 1 coin takes only 1', () => {
+  let s = rig({ a: ['captain', 'contessa'], b: ['duke', 'duke'] }, ['duke'], { a: 2, b: 1 });
+  s = mv(s, 'a', { type: 'declare', action: 'steal', target: 'b' });
+  s = mv(s, 'b', { type: 'pass' });
+  s = mv(s, 'b', { type: 'pass' });
+  eq(P(s, 'a').coins, 3, 'a took 1');
+  eq(P(s, 'b').coins, 0, 'b at 0');
+});
+
+test('steal from 0 coins is rejected', () => {
+  const s = rig({ a: ['captain', 'contessa'], b: ['duke', 'duke'] }, ['duke'], { a: 2, b: 0 });
+  expectError(s, 'a', { type: 'declare', action: 'steal', target: 'b' }, 'steal from broke player');
+});
+
+test('steal blocked by ambassador claim (unchallenged): no transfer', () => {
+  let s = rig({ a: ['captain', 'contessa'], b: ['duke', 'duke'] }, ['duke'], { a: 2, b: 5 });
+  s = mv(s, 'a', { type: 'declare', action: 'steal', target: 'b' });
+  s = mv(s, 'b', { type: 'pass' });
+  s = mv(s, 'b', { type: 'block', role: 'ambassador' });
+  s = mv(s, 'a', { type: 'pass' });
+  eq(P(s, 'a').coins, 2, 'no steal');
+  eq(P(s, 'b').coins, 5, 'b untouched');
+});
+
+test('assassinate: fee paid up-front, target loses a card', () => {
+  let s = rig({ a: ['assassin', 'contessa'], b: ['duke', 'duke'] }, ['captain'], { a: 3, b: 2 });
+  s = mv(s, 'a', { type: 'declare', action: 'assassinate', target: 'b' });
+  eq(P(s, 'a').coins, 0, 'fee spent at declaration');
+  s = mv(s, 'b', { type: 'pass' }); // no challenge
+  s = mv(s, 'b', { type: 'pass' }); // no block
+  eq(s.phase, 'lose_card', 'b must lose');
+  s = mv(s, 'b', { type: 'lose', cardIndex: 0 });
+  eq(influence(P(s, 'b')), 1, 'b lost a card');
+  eq(P(s, 'a').coins, 0, 'fee stays spent');
+});
+
+test('assassinate blocked by contessa (unchallenged): fee lost, no kill', () => {
+  let s = rig({ a: ['assassin', 'duke'], b: ['contessa', 'duke'] }, ['captain'], { a: 3, b: 2 });
+  s = mv(s, 'a', { type: 'declare', action: 'assassinate', target: 'b' });
+  s = mv(s, 'b', { type: 'pass' });
+  s = mv(s, 'b', { type: 'block', role: 'contessa' });
+  s = mv(s, 'a', { type: 'pass' });
+  eq(P(s, 'a').coins, 0, 'fee NOT refunded on block');
+  eq(influence(P(s, 'b')), 2, 'b unhurt');
+  eq(s.players[s.turn].id, 'b', 'turn advanced');
+});
+
+test('assassinate successfully challenged: actor loses card AND gets fee back', () => {
+  let s = rig({ a: ['captain', 'duke'], b: ['contessa', 'duke'] }, ['captain'], { a: 3, b: 2 });
+  s = mv(s, 'a', { type: 'declare', action: 'assassinate', target: 'b' }); // bluff!
+  s = mv(s, 'b', { type: 'challenge' });
+  eq(s.phase, 'lose_card', 'a must lose');
+  s = mv(s, 'a', { type: 'lose', cardIndex: 0 });
+  eq(P(s, 'a').coins, 3, 'fee refunded on successful challenge');
+  eq(influence(P(s, 'a')), 1, 'a lost a card');
+  eq(influence(P(s, 'b')), 2, 'b unhurt');
+});
+
+test('the double-kill: target challenges a REAL assassin, loses challenge card, then the hit lands', () => {
+  let s = rig(
+    { a: ['assassin', 'duke'], b: ['captain', 'captain'], c: ['duke', 'duke'] },
+    ['contessa', 'ambassador'],
+    { a: 3, b: 2, c: 2 },
+  );
+  s = mv(s, 'a', { type: 'declare', action: 'assassinate', target: 'b' });
+  s = mv(s, 'b', { type: 'challenge' }); // b challenges — a HAS the assassin
+  eq(s.phase, 'lose_card', 'b loses for the failed challenge');
+  s = mv(s, 'b', { type: 'lose', cardIndex: 0 });
+  eq(influence(P(s, 'b')), 1, 'b down to 1');
+  // Block window now opens for b (c already implicitly uninvolved)
+  eq(s.phase, 'block', 'b may still try to block');
+  s = mv(s, 'b', { type: 'pass' });
+  // Single remaining card → auto-revealed
+  eq(influence(P(s, 'b')), 0, 'b eliminated');
+  assert(!isAlive(P(s, 'b')), 'b is out');
+  eq(s.phase, 'action', 'game continues (c alive)');
+});
+
+test('coup: pay 7, unblockable, mandatory at 10+', () => {
+  let s = rig({ a: ['duke', 'duke'], b: ['contessa', 'contessa'] }, ['captain'], { a: 10, b: 2 });
+  const r = apply(s, 'a', { type: 'declare', action: 'income' });
+  assert(!!r.error, 'income rejected at 10 coins');
+  s = mv(s, 'a', { type: 'declare', action: 'coup', target: 'b' });
+  eq(P(s, 'a').coins, 3, 'paid 7');
+  eq(s.phase, 'lose_card', 'b must lose');
+  s = mv(s, 'b', { type: 'lose', cardIndex: 1 });
+  eq(influence(P(s, 'b')), 1, 'b lost one');
+  eq(s.players[s.turn].id, 'b', "b's turn");
+});
+
+test('coup needs 7 coins', () => {
+  const s = rig({ a: ['duke', 'duke'], b: ['contessa', 'contessa'] }, ['captain'], { a: 6, b: 2 });
+  expectError(s, 'a', { type: 'declare', action: 'coup', target: 'b' }, 'coup with 6 coins');
+});
+
+test('exchange: draw 2, keep same count, rest reshuffled back', () => {
+  let s = rig({ a: ['ambassador', 'contessa'], b: ['duke', 'duke'] }, ['captain', 'assassin', 'duke']);
+  s = mv(s, 'a', { type: 'declare', action: 'exchange' });
+  s = mv(s, 'b', { type: 'pass' });
+  eq(s.phase, 'exchange', 'picker open');
+  eq(s.pending?.drawn?.length, 2, 'drew 2');
+  eq(s.deck.length, 1, 'deck now 1');
+  // pool = [ambassador, contessa, captain, assassin] → keep the two drawn
+  s = mv(s, 'a', { type: 'exchange_keep', keep: [2, 3] });
+  const roles = P(s, 'a').cards.filter((c) => !c.revealed).map((c) => c.role).sort();
+  eq(roles, ['assassin', 'captain'], 'kept the drawn cards');
+  eq(s.deck.length, 3, 'returned 2 to deck');
+  eq(s.players[s.turn].id, 'b', 'turn advanced');
+});
+
+test('exchange with one influence keeps exactly one', () => {
+  let s = rig({ a: ['ambassador', 'contessa'], b: ['duke', 'duke'] }, ['captain', 'assassin']);
+  P(s, 'a').cards[1].revealed = true; // a has 1 influence
+  s = mv(s, 'a', { type: 'declare', action: 'exchange' });
+  s = mv(s, 'b', { type: 'pass' });
+  // pool = [ambassador, captain, assassin]
+  const bad = apply(s, 'a', { type: 'exchange_keep', keep: [0, 1] });
+  assert(!!bad.error, 'keeping 2 with 1 influence rejected');
+  s = mv(s, 'a', { type: 'exchange_keep', keep: [1] });
+  eq(
+    P(s, 'a').cards.filter((c) => !c.revealed).map((c) => c.role),
+    ['captain'],
+    'kept 1',
+  );
+  eq(s.deck.length, 2, 'two back in deck');
+});
+
+test('exchange challenged on a bluff: no draw happens', () => {
+  let s = rig({ a: ['duke', 'contessa'], b: ['duke', 'duke'] }, ['captain', 'assassin']);
+  s = mv(s, 'a', { type: 'declare', action: 'exchange' }); // bluff
+  s = mv(s, 'b', { type: 'challenge' });
+  s = mv(s, 'a', { type: 'lose', cardIndex: 0 });
+  eq(s.deck.length, 2, 'deck untouched');
+  eq(s.players[s.turn].id, 'b', 'turn advanced');
+});
+
+test('challenge windows: any uninvolved player may challenge', () => {
+  let s = rig(
+    { a: ['duke', 'duke'], b: ['contessa', 'contessa'], c: ['captain', 'captain'] },
+    ['ambassador', 'assassin'],
+  );
+  s = mv(s, 'a', { type: 'declare', action: 'tax' });
+  eq(pendingResponders(s).sort(), ['b', 'c'], 'both may respond');
+  s = mv(s, 'c', { type: 'challenge' }); // uninvolved c challenges — a has duke
+  s = mv(s, 'c', { type: 'lose', cardIndex: 0 });
+  eq(P(s, 'a').coins, 5, 'tax resolved after failed challenge');
+});
+
+test('turn skips eliminated players', () => {
+  let s = rig(
+    { a: ['duke', 'duke'], b: ['contessa', 'contessa'], c: ['captain', 'captain'] },
+    ['ambassador'],
+    { a: 7, b: 2, c: 2 },
+  );
+  P(s, 'b').cards.forEach((c) => (c.revealed = true)); // b already out
+  s = mv(s, 'a', { type: 'declare', action: 'income' });
+  eq(s.players[s.turn].id, 'c', 'skipped b');
+});
+
+test('win: last player standing, game_over locks moves', () => {
+  let s = rig({ a: ['duke', 'duke'], b: ['contessa', 'contessa'] }, ['ambassador'], { a: 7, b: 2 });
+  P(s, 'b').cards[0].revealed = true;
+  s = mv(s, 'a', { type: 'declare', action: 'coup', target: 'b' });
+  // b's single card auto-reveals
+  eq(s.phase, 'game_over', 'game over');
+  eq(s.winner, 'a', 'a wins');
+  const r = apply(s, 'b', { type: 'declare', action: 'income' });
+  assert(!!r.error, 'moves rejected after game over');
+});
+
+test('forfeit mid-window completes the window', () => {
+  let s = rig(
+    { a: ['duke', 'duke'], b: ['contessa', 'contessa'], c: ['captain', 'captain'] },
+    ['ambassador'],
+  );
+  s = mv(s, 'a', { type: 'declare', action: 'tax' });
+  s = mv(s, 'b', { type: 'pass' });
+  s = mv(s, 'c', { type: 'forfeit' }); // last responder leaves
+  eq(P(s, 'a').coins, 5, 'tax resolved');
+  assert(!isAlive(P(s, 'c')), 'c out');
+});
+
+test('forfeit of the turn holder advances the turn', () => {
+  let s = rig(
+    { a: ['duke', 'duke'], b: ['contessa', 'contessa'], c: ['captain', 'captain'] },
+    ['ambassador'],
+  );
+  s = mv(s, 'a', { type: 'forfeit' });
+  eq(s.players[s.turn].id, 'b', "b's turn");
+  eq(s.phase, 'action', 'action phase');
+});
+
+test('forfeit down to one player ends the game', () => {
+  let s = rig({ a: ['duke', 'duke'], b: ['contessa', 'contessa'] }, ['ambassador']);
+  s = mv(s, 'a', { type: 'forfeit' });
+  eq(s.phase, 'game_over', 'over');
+  eq(s.winner, 'b', 'b wins');
+});
+
+test('validation: acting out of turn / phase rejected', () => {
+  const s = rig({ a: ['duke', 'duke'], b: ['contessa', 'contessa'] }, ['ambassador']);
+  expectError(s, 'b', { type: 'declare', action: 'income' }, 'out of turn');
+  expectError(s, 'b', { type: 'challenge' }, 'challenge with no claim');
+  expectError(s, 'a', { type: 'lose', cardIndex: 0 }, 'lose without owing');
+});
+
+test('cannot target self / dead players', () => {
+  let s = rig(
+    { a: ['duke', 'duke'], b: ['contessa', 'contessa'], c: ['captain', 'captain'] },
+    ['ambassador'],
+    { a: 7, b: 2, c: 2 },
+  );
+  P(s, 'b').cards.forEach((c) => (c.revealed = true));
+  expectError(s, 'a', { type: 'declare', action: 'coup', target: 'a' }, 'self target');
+  expectError(s, 'a', { type: 'declare', action: 'coup', target: 'b' }, 'dead target');
+});
+
+test('double pass rejected; duplicate challenge windows close exactly once', () => {
+  let s = rig(
+    { a: ['duke', 'duke'], b: ['contessa', 'contessa'], c: ['captain', 'captain'] },
+    ['ambassador'],
+  );
+  s = mv(s, 'a', { type: 'declare', action: 'tax' });
+  s = mv(s, 'b', { type: 'pass' });
+  expectError(s, 'b', { type: 'pass' }, 'double pass');
+  s = mv(s, 'c', { type: 'pass' });
+  eq(s.phase, 'action', 'window closed once');
+});
+
+test('full 4-player smoke game runs to completion with random-ish play', () => {
+  let s = newGame(
+    ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id })),
+    () => 0.42,
+  );
+  let guard = 0;
+  while (s.phase !== 'game_over' && guard++ < 2000) {
+    if (s.phase === 'action') {
+      const me = s.players[s.turn];
+      // prefer coup when forced/possible, else income
+      if (me.coins >= 7) {
+        const tgt = s.players.find((p) => p.id !== me.id && isAlive(p))!;
+        s = mv(s, me.id, { type: 'declare', action: 'coup', target: tgt.id });
+      } else {
+        s = mv(s, me.id, { type: 'declare', action: 'income' });
+      }
+    } else if (s.phase === 'lose_card') {
+      const loser = s.lossQueue[0].playerId;
+      const idx = P(s, loser).cards.findIndex((c) => !c.revealed);
+      s = mv(s, loser, { type: 'lose', cardIndex: idx });
+    } else {
+      const owed = pendingResponders(s);
+      if (owed.length === 0) throw new Error('stuck window');
+      s = mv(s, owed[0], { type: 'pass' });
+    }
+  }
+  assert(s.phase === 'game_over' && guard < 2000, 'smoke game finished');
+  assert(!!s.winner, 'has a winner');
+});
+
+/* ------------------------------------------------------------------ */
+
+console.log(`\n${passed} assertions passed, ${failed} failed`);
+if (failed > 0) process.exit(1);
