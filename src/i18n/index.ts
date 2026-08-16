@@ -10,7 +10,7 @@ export type Lang = 'en' | 'ar';
 
 export const dict = {
   // App chrome
-  appName: { en: 'Coup', ar: 'كو' },
+  appName: { en: 'Coup', ar: 'كوب' },
   tabPlay: { en: 'Play', ar: 'اللعب' },
   tabRules: { en: 'Rules', ar: 'القواعد' },
   tabSettings: { en: 'More', ar: 'المزيد' },
@@ -227,7 +227,7 @@ export const dict = {
   about: { en: 'About', ar: 'حول' },
   aboutText: {
     en: 'A fan-made digital adaptation of the card game Coup for playing with friends — each on their own device.',
-    ar: 'نسخة رقمية غير رسمية من لعبة كو الورقية للعب مع الأصدقاء — كلٌّ على جهازه.',
+    ar: 'نسخة رقمية غير رسمية من لعبة كوب الورقية للعب مع الأصدقاء — كلٌّ على جهازه.',
   },
 } as const;
 
