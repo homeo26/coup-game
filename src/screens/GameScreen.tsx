@@ -28,6 +28,7 @@ import { InfluenceCard } from '../components/InfluenceCard';
 import { CoinCount, CoinIcon } from '../components/Coin';
 import { RoleArt } from '../components/RoleArt';
 import { RolePortrait } from '../components/RolePortrait';
+import { ActionGlyph } from '../components/ActionGlyph';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useRoom } from '../net/RoomContext';
 import { useSettings } from '../settings';
@@ -302,7 +303,10 @@ export function GameScreen() {
                 ]}
               >
                 {role ? (
-                  <RolePortrait role={role} size={24} ring={1.5} />
+                  <View style={styles.chipIcons}>
+                    <RolePortrait role={role} size={24} ring={1.5} />
+                    <ActionGlyph action={a} size={17} color={roleColors[role]} />
+                  </View>
                 ) : (
                   <Ionicons
                     name={a === 'coup' ? 'skull' : a === 'income' ? 'add' : 'cash-outline'}
@@ -784,6 +788,11 @@ const makeStyles = (theme: Theme) =>
     claimRow: {
       alignItems: 'center',
       marginBottom: -2,
+    },
+    chipIcons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
     },
     chipLabel: {
       fontSize: 13,

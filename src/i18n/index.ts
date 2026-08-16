@@ -111,6 +111,7 @@ export const dict = {
   logStealBlocked: { en: 'The steal was blocked', ar: 'تم صدّ السرقة' },
   logExchange: { en: '{a} exchanged with the Court', ar: '{a} تبادل مع المحكمة' },
   logDeclared: { en: '{a} claims {r}: {act}', ar: '{a} يدّعي {r}: {act}' },
+  logForeignAidDeclared: { en: '{a}: Foreign Aid', ar: '{a}: معونة خارجية' },
   logBlockDeclared: { en: '{a} claims {r} to block', ar: '{a} يدّعي {r} للصدّ' },
   logChallenge: { en: '{a} challenges {b}!', ar: '{a} يتحدى {b}!' },
   logChallengeFailed: {

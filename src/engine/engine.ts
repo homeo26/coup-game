@@ -246,7 +246,7 @@ function declare(s: GameState, me: PlayerState, action: ActionType, target?: str
     case 'foreign_aid':
       s.pending = mkPending(action, me.id);
       s.phase = 'block';
-      log(s, 'logDeclared', { a: me.name, r: '', act: action });
+      log(s, 'logForeignAidDeclared', { a: me.name });
       return;
 
     case 'coup':
