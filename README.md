@@ -16,13 +16,13 @@ flowchart LR
         C[Player C…]
     end
     subgraph Firebase["🔥 Firebase (coup-game-rooms)"]
-        FS[(Firestore
-coup_rooms/{code})]
+        FS[("Firestore
+coup_rooms/{code}")]
     end
-    A -->|create room → code| FS
-    B -->|join by code| FS
-    C -->|join by code| FS
-    FS -->|live snapshots| Devices
+    A -->|"create room → code"| FS
+    B -->|"join by code"| FS
+    C -->|"join by code"| FS
+    FS -->|"live snapshots"| Devices
 ```
 
 No backend server. The full `GameState` lives in a single Firestore doc
