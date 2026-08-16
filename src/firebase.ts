@@ -4,7 +4,7 @@
  * this collection is isolated by security rules).
  */
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDWfIrhOCq_urMb8gfr3n8a8iNYRZXJQCc',
@@ -17,3 +17,12 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+// Local development: point at the Firestore emulator when the bundle is
+// built with EXPO_PUBLIC_FIRESTORE_EMULATOR=host:port (never set in
+// release builds).
+const emu = process.env.EXPO_PUBLIC_FIRESTORE_EMULATOR;
+if (emu) {
+  const [host, port] = emu.split(':');
+  connectFirestoreEmulator(db, host, parseInt(port, 10));
+}
