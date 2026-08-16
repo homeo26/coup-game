@@ -77,6 +77,13 @@ export const dict = {
   coins: { en: 'coins', ar: 'عملات' },
   courtDeck: { en: 'Court', ar: 'المحكمة' },
   yourTurn: { en: 'Your turn', ar: 'دورك' },
+  chooseAction: { en: 'Choose your action', ar: 'اختر إجراءك' },
+  bluff: { en: 'Bluff', ar: 'خدعة' },
+  bluffHint: {
+    en: "You don't hold this card — anyone may challenge you",
+    ar: 'لا تملك هذه البطاقة — قد يتحداك أي لاعب',
+  },
+  confirmAction: { en: 'Confirm: {action}', ar: 'تأكيد: {action}' },
   turnOf: { en: "{name}'s turn", ar: 'دور {name}' },
   chooseTarget: { en: 'Choose a target', ar: 'اختر هدفاً' },
   mustCoup: { en: '10+ coins — you must Coup', ar: '10 عملات أو أكثر — يجب أن تنفذ انقلاباً' },

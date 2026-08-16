@@ -9,6 +9,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { Theme, font, latinFont, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
+import { Breathing } from '../components/Breathing';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useRoom } from '../net/RoomContext';
 import { useSettings } from '../settings';
@@ -60,6 +61,7 @@ export function LobbyScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
+      <Breathing />
       <View style={[styles.header, rtl && styles.rowReverse]}>
         <Pressy scaleTo={0.85} style={styles.iconBtn} onPress={onLeave} hitSlop={8}>
           <Ionicons name="exit-outline" size={20} color={theme.colors.danger} />
@@ -87,7 +89,7 @@ export function LobbyScreen() {
           <Animated.View
             key={p.id}
             entering={FadeInDown.duration(300).delay(Math.min(i * 50, 250))}
-            layout={LinearTransition.springify().damping(18)}
+            layout={LinearTransition.duration(200)}
             style={[styles.playerRow, rtl && styles.rowReverse]}
           >
             <View style={styles.avatar}>

@@ -3,7 +3,8 @@ import { I18nManager, LogBox, View } from 'react-native';
 
 // The Firestore web SDK logs WebChannel transport noise on RN; the LogBox
 // pill it spawns overlays (and steals taps from) the bottom action area.
-LogBox.ignoreLogs([/WebChannelConnection/, /@firebase\/firestore/]);
+// Reanimated's layout-animation advisory is likewise dev-only noise.
+LogBox.ignoreLogs([/WebChannelConnection/, /@firebase\/firestore/, /\[Reanimated\]/]);
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

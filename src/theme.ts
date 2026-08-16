@@ -21,24 +21,25 @@ export const roleColors = {
 
 export const theme = {
   colors: {
-    // Brand
-    gold: '#d4a854',
-    goldDark: '#8c6828',
-    goldLight: '#f5d68c',
-    inkOnGold: '#18140e',
+    // Accent — polished silver, matching the game's coin token.
+    // (Keys keep the historical 'gold' names to avoid a mass rename.)
+    gold: '#c9ccd4',
+    goldDark: '#7d828e',
+    goldLight: '#e9ebf0',
+    inkOnGold: '#14161a',
 
-    // Neutrals (warm near-black court)
-    background: '#12100d',
-    surface: '#1e1a14',
-    surfaceElevated: '#272219',
-    surfaceHover: '#2f2920',
-    border: 'rgba(245, 214, 140, 0.10)',
-    borderBright: 'rgba(245, 214, 140, 0.22)',
+    // Neutrals (cool near-black — lets the character colors breathe)
+    background: '#0e1014',
+    surface: '#171a20',
+    surfaceElevated: '#1e222b',
+    surfaceHover: '#272c37',
+    border: 'rgba(200, 210, 230, 0.10)',
+    borderBright: 'rgba(200, 210, 230, 0.22)',
 
     // Text
-    ink: '#f0e8d8',
-    inkSoft: '#b0a68e',
-    inkFaint: '#6f675c',
+    ink: '#eef0f4',
+    inkSoft: '#a7adba',
+    inkFaint: '#646a76',
 
     // Semantic
     success: '#5da860',
@@ -46,15 +47,15 @@ export const theme = {
     warning: '#e8a33d',
 
     // Tab bar
-    tabBar: 'rgba(22, 19, 15, 0.97)',
-    tabActive: '#d4a854',
-    tabInactive: '#6f675c',
+    tabBar: 'rgba(12, 14, 18, 0.97)',
+    tabActive: '#c9ccd4',
+    tabInactive: '#646a76',
   },
   role: roleColors,
   gradients: {
-    gold: ['#8c6828', '#d4a854'] as [string, string],
-    table: ['#1a1712', '#12100d'] as [string, string],
-    card: ['#272219', '#1e1a14'] as [string, string],
+    gold: ['#7d828e', '#c9ccd4'] as [string, string],
+    table: ['#14171d', '#0e1014'] as [string, string],
+    card: ['#1e222b', '#171a20'] as [string, string],
   },
   radius: { xs: 6, sm: 10, md: 16, lg: 20, xl: 28, pill: 999 },
   spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 },
@@ -78,9 +79,9 @@ export const theme = {
       elevation: 4,
     },
     goldGlow: {
-      shadowColor: '#d4a854',
+      shadowColor: '#c9ccd4',
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.35,
+      shadowOpacity: 0.3,
       shadowRadius: 14,
       elevation: 6,
     },

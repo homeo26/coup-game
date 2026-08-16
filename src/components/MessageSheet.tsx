@@ -52,7 +52,7 @@ export function MessageSheet({ message, onClose }: Props) {
       translateY.value = SCREEN_H;
       backdropOpacity.value = 0;
       requestAnimationFrame(() => {
-        translateY.value = withSpring(0, { damping: 22, stiffness: 200, mass: 0.7 });
+        translateY.value = withTiming(0, { duration: 260 });
         backdropOpacity.value = withTiming(1, { duration: 220 });
       });
     }
@@ -87,8 +87,8 @@ export function MessageSheet({ message, onClose }: Props) {
           if (finished) runOnJS(afterExit)();
         });
       } else {
-        translateY.value = withSpring(0, { damping: 22, stiffness: 220 });
-        backdropOpacity.value = withSpring(1);
+        translateY.value = withTiming(0, { duration: 200 });
+        backdropOpacity.value = withTiming(1, { duration: 200 });
       }
     });
 

@@ -19,6 +19,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Theme, font, latinFont, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
+import { Breathing } from '../components/Breathing';
 import { RolePortrait } from '../components/RolePortrait';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useSettings } from '../settings';
@@ -99,6 +100,7 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
+      <Breathing />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

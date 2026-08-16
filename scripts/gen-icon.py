@@ -9,12 +9,15 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
+# NOTE: the original photo was removed from Downloads. The composed icon
+# is preserved at art-src/icon-face-backup.png; this script needs the raw
+# photo to regenerate from scratch.
 SRC = '/Users/homeo/Downloads/Telegram Desktop/photo_2026-08-16_16-30-55.jpg'
 OUT = __file__.rsplit('/', 2)[0] + '/assets'
 
-GOLD = (212, 168, 84)
-GOLD_LIGHT = (245, 214, 140)
-BG = (18, 16, 13)
+GOLD = (201, 204, 212)
+GOLD_LIGHT = (233, 235, 240)
+BG = (14, 16, 20)
 
 
 def face_square():

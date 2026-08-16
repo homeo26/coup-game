@@ -12,11 +12,11 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 OUT = os.path.join(os.path.dirname(__file__), "..", "assets")
 os.makedirs(OUT, exist_ok=True)
 
-BG = (18, 16, 13, 255)          # #12100d warm near-black
-GOLD = (212, 168, 84)           # main gold
-GOLD_DARK = (140, 104, 40)
-GOLD_LIGHT = (245, 214, 140)
-INK = (24, 20, 14)
+BG = (14, 16, 20, 255)          # #0e1014 cool near-black
+GOLD = (201, 204, 212)           # main gold
+GOLD_DARK = (125, 130, 142)
+GOLD_LIGHT = (233, 235, 240)
+INK = (18, 20, 26)
 
 
 def lerp(a, b, t):

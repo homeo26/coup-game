@@ -1,16 +1,18 @@
 /**
- * InfluenceCard — one influence card. Face-down shows the court back
- * (gold star seal); face-up shows the role art, name and color. A card
- * flipping from hidden → revealed animates a subtle flip-and-settle.
- * Revealed (lost) cards render dimmed with a strike.
+ * InfluenceCard — a proper playing card.
+ *
+ * Face: role-tinted gradient frame, corner emblem pip, oval portrait,
+ * name plate. Back: dark court back with the star seal. A card that
+ * flips from hidden to revealed plays a half-flip (turn-over) motion;
+ * lost cards render dimmed with a strike.
  */
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   interpolate,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Circle, Polygon } from 'react-native-svg';
@@ -28,6 +30,8 @@ interface Props {
   width?: number;
   /** Highlight ring (e.g. selectable in a picker). */
   selected?: boolean;
+  /** Slight rotation for a fanned-hand feel (degrees). */
+  tilt?: number;
 }
 
 function starPoints(cx: number, cy: number, rOut: number, rIn: number): string {
@@ -40,64 +44,86 @@ function starPoints(cx: number, cy: number, rOut: number, rIn: number): string {
   return pts.join(' ');
 }
 
-export function InfluenceCard({ role, dead, width = 96, selected }: Props) {
+export function InfluenceCard({ role, dead, width = 96, selected, tilt = 0 }: Props) {
   const styles = useStyles(makeStyles);
-  const height = Math.round(width * 1.45);
+  const height = Math.round(width * 1.42);
   const faceUp = role !== undefined;
 
-  // Animate the transition the first time this card flips to dead
-  // (a reveal): quick tilt + settle.
-  const wasDead = useRef(dead);
+  // Turn-over: when the card first becomes face-up (opponent reveal) or
+  // first becomes dead, play a calm half-flip.
+  const prevFace = useRef(faceUp);
+  const prevDead = useRef(dead);
   const flip = useSharedValue(0);
   useEffect(() => {
-    if (dead && !wasDead.current) {
-      flip.value = 0;
-      flip.value = withDelay(60, withTiming(1, { duration: 420 }));
+    if ((faceUp && !prevFace.current) || (dead && !prevDead.current)) {
+      flip.value = 1;
+      flip.value = withTiming(0, { duration: 380 });
     }
-    wasDead.current = dead;
-  }, [dead, flip]);
+    prevFace.current = faceUp;
+    prevDead.current = dead;
+  }, [faceUp, dead, flip]);
   const anim = useAnimatedStyle(() => ({
     transform: [
-      { rotateZ: `${interpolate(flip.value, [0, 0.5, 1], [0, -6, 0])}deg` },
-      { scale: interpolate(flip.value, [0, 0.5, 1], [1, 1.06, 1]) },
+      { perspective: 900 },
+      { rotateY: `${interpolate(flip.value, [0, 1], [0, 80])}deg` },
+      { rotateZ: `${tilt}deg` },
     ],
   }));
+
+  const rc = role ? roleColors[role] : '#3a4150';
 
   return (
     <Animated.View
       style={[
         styles.card,
-        { width, height },
-        faceUp && role ? { borderColor: roleColors[role] + '66' } : null,
+        { width, height, borderColor: faceUp ? rc + '77' : styles.card.borderColor },
         selected ? styles.selected : null,
         dead ? styles.dead : null,
         anim,
       ]}
     >
       {faceUp && role ? (
-        <>
-          <View style={styles.artWrap}>
-            <RolePortrait role={role} size={Math.round(width * 0.6)} ring={2} />
-            <View style={styles.emblem}>
-              <RoleArt role={role} size={Math.round(width * 0.17)} />
-            </View>
+        <LinearGradient
+          colors={[rc + '30', 'transparent', rc + '1c']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.face}
+        >
+          {/* inner frame like a printed card */}
+          <View style={[styles.frame, { borderColor: rc + '55' }]} />
+          {/* corner pip */}
+          <View style={styles.pip}>
+            <RoleArt role={role} size={Math.max(12, Math.round(width * 0.16))} />
           </View>
-          <Text
-            numberOfLines={1}
-            style={[styles.name, { color: roleColors[role], fontSize: Math.max(11, width * 0.14) }]}
-          >
-            {t(role as TKey)}
-          </Text>
+          <View style={styles.artWrap}>
+            <RolePortrait role={role} size={Math.round(width * 0.58)} ring={2} />
+          </View>
+          <View style={[styles.namePlate, { borderColor: rc + '44' }]}>
+            <Text
+              numberOfLines={1}
+              style={[styles.name, { color: rc, fontSize: Math.max(10, width * 0.13) }]}
+            >
+              {t(role as TKey)}
+            </Text>
+          </View>
           {dead ? <View style={styles.strike} /> : null}
-        </>
+        </LinearGradient>
       ) : (
-        <View style={styles.backWrap}>
-          <Svg width={width * 0.5} height={width * 0.5} viewBox="0 0 48 48">
-            <Circle cx={24} cy={24} r={21} stroke="#8c6828" strokeWidth={2.5} fill="none" />
-            <Circle cx={24} cy={24} r={16} stroke="#8c682855" strokeWidth={1.5} fill="none" />
-            <Polygon points={starPoints(24, 24, 11, 4.7)} fill="#8c6828" />
-          </Svg>
-        </View>
+        <LinearGradient
+          colors={['#1c2028', '#14171d']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.face}
+        >
+          <View style={[styles.frame, { borderColor: 'rgba(200,210,230,0.14)' }]} />
+          <View style={styles.backWrap}>
+            <Svg width={width * 0.46} height={width * 0.46} viewBox="0 0 48 48">
+              <Circle cx={24} cy={24} r={21} stroke="#59606e" strokeWidth={2.5} fill="none" />
+              <Circle cx={24} cy={24} r={16} stroke="#59606e55" strokeWidth={1.5} fill="none" />
+              <Polygon points={starPoints(24, 24, 11, 4.7)} fill="#59606e" />
+            </Svg>
+          </View>
+        </LinearGradient>
       )}
     </Animated.View>
   );
@@ -106,38 +132,56 @@ export function InfluenceCard({ role, dead, width = 96, selected }: Props) {
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
     card: {
-      borderRadius: theme.radius.sm,
+      borderRadius: 10,
       backgroundColor: theme.colors.surfaceElevated,
       borderWidth: 1.5,
       borderColor: theme.colors.border,
-      alignItems: 'center',
-      justifyContent: 'center',
       overflow: 'hidden',
+      ...theme.shadow.card,
     },
-    selected: {
-      borderColor: theme.colors.gold,
-      borderWidth: 2.5,
-      ...theme.shadow.goldGlow,
+    face: {
+      flex: 1,
     },
-    dead: {
-      opacity: 0.45,
-      backgroundColor: theme.colors.surface,
+    frame: {
+      position: 'absolute',
+      top: 4,
+      left: 4,
+      right: 4,
+      bottom: 4,
+      borderWidth: 1,
+      borderRadius: 7,
+    },
+    pip: {
+      position: 'absolute',
+      top: 7,
+      left: 7,
+      opacity: 0.95,
     },
     artWrap: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingBottom: 2,
     },
-    emblem: {
-      position: 'absolute',
-      top: 4,
-      left: 4,
-      opacity: 0.9,
+    namePlate: {
+      marginHorizontal: 8,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderRadius: 6,
+      paddingVertical: 1,
+      alignItems: 'center',
+      backgroundColor: 'rgba(10, 12, 16, 0.45)',
     },
     name: {
       fontFamily: font('bold'),
-      paddingBottom: 6,
-      paddingHorizontal: 4,
+    },
+    selected: {
+      borderColor: theme.colors.goldLight,
+      borderWidth: 2.5,
+      ...theme.shadow.goldGlow,
+    },
+    dead: {
+      opacity: 0.45,
     },
     strike: {
       position: 'absolute',

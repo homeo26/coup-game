@@ -15,7 +15,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   FadeIn,
   FadeInDown,
-  FadeInUp,
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
@@ -28,7 +27,7 @@ import { InfluenceCard } from '../components/InfluenceCard';
 import { CoinCount, CoinIcon } from '../components/Coin';
 import { RoleArt } from '../components/RoleArt';
 import { RolePortrait } from '../components/RolePortrait';
-import { ActionGlyph } from '../components/ActionGlyph';
+import { Breathing } from '../components/Breathing';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useRoom } from '../net/RoomContext';
 import { useSettings } from '../settings';
@@ -167,7 +166,8 @@ export function GameScreen() {
   const { width } = useWindowDimensions();
   const { lang } = useSettings();
   const { room, myId, move, leave, again } = useRoom();
-  const [targeting, setTargeting] = useState<ActionType | null>(null);
+  const [selAction, setSelAction] = useState<ActionType | null>(null);
+  const [selTarget, setSelTarget] = useState<string | null>(null);
   const [loseIdx, setLoseIdx] = useState<number | null>(null);
   const [keepIdxs, setKeepIdxs] = useState<number[]>([]);
   const [sending, setSending] = useState(false);
@@ -197,7 +197,8 @@ export function GameScreen() {
 
   // Reset transient selections when the phase moves on
   useEffect(() => {
-    setTargeting(null);
+    setSelAction(null);
+    setSelTarget(null);
     setLoseIdx(null);
     setKeepIdxs([]);
   }, [g?.version]);
@@ -221,14 +222,27 @@ export function GameScreen() {
     }
   };
 
-  const declare = (action: ActionType) => {
-    const needsTarget = action === 'coup' || action === 'assassinate' || action === 'steal';
-    if (needsTarget) {
-      haptics.selection();
-      setTargeting(action);
-    } else {
-      dispatch({ type: 'declare', action });
-    }
+  const needsTarget = (a: ActionType) => a === 'coup' || a === 'assassinate' || a === 'steal';
+
+  /** Roles I actually hold (unrevealed) — used to flag bluffs honestly. */
+  const myRoles = me
+    ? me.cards.filter((c) => !c.revealed).map((c) => c.role)
+    : [];
+
+  const selectAction = (action: ActionType) => {
+    haptics.selection();
+    setSelTarget(null);
+    setSelAction((prev) => (prev === action ? null : action));
+  };
+
+  const confirmAction = () => {
+    if (!selAction) return;
+    if (needsTarget(selAction) && !selTarget) return;
+    const action = selAction;
+    const target = selTarget ?? undefined;
+    setSelAction(null);
+    setSelTarget(null);
+    dispatch({ type: 'declare', action, ...(target ? { target } : {}) });
   };
 
   const onLeave = () => {
@@ -254,17 +268,7 @@ export function GameScreen() {
 
   if (g.phase === 'game_over') {
     panel = null; // overlay below
-  } else if (targeting) {
-    panel = (
-      <Animated.View entering={FadeInUp.duration(200)} style={styles.panel}>
-        <Text style={styles.panelTitle}>{t('chooseTarget')}</Text>
-        <Pressy scaleTo={0.94} style={styles.neutralBtn} onPress={() => setTargeting(null)}>
-          <Text style={styles.neutralBtnText}>{t('cancel')}</Text>
-        </Pressy>
-      </Animated.View>
-    );
   } else if (isMyTurn) {
-    const canA = (cost: number) => me.coins >= cost && !sending;
     const actions: { a: ActionType; label: TKey; desc: TKey; cost?: number; role?: Role }[] = [
       { a: 'income', label: 'income', desc: 'incomeDesc' },
       { a: 'foreign_aid', label: 'foreign_aid', desc: 'foreignAidDesc' },
@@ -274,13 +278,18 @@ export function GameScreen() {
       { a: 'assassinate', label: 'assassinate', desc: 'assassinateDesc', cost: 3, role: 'assassin' },
       { a: 'coup', label: 'coupAction', desc: 'coupDesc', cost: 7 },
     ];
+    const sel = actions.find((x) => x.a === selAction);
+    const awaitingTarget = !!selAction && needsTarget(selAction) && !selTarget;
+    const targetLabel = selTarget
+      ? g.players.find((p) => p.id === selTarget)?.name ?? ''
+      : '';
     panel = (
-      <Animated.View entering={FadeInUp.duration(220)} style={styles.panel}>
-        <Text style={styles.panelTitle}>
-          {mustCoup ? t('mustCoup') : t('yourTurn')}
-        </Text>
+      <Animated.View entering={FadeIn.duration(180)} style={styles.panel}>
+        <Text style={styles.panelTitle}>{mustCoup ? t('mustCoup') : t('chooseAction')}</Text>
         <View style={styles.actionGrid}>
-          {actions.map(({ a, label, cost, role }) => {
+          {actions
+            .filter(({ a }) => !selAction || a === selAction)
+            .map(({ a, label, desc, cost, role }) => {
             const disabled =
               sending ||
               (cost !== undefined && me.coins < cost) ||
@@ -288,43 +297,90 @@ export function GameScreen() {
               // steal needs someone with coins; coup/assassinate need a live target
               ((a === 'steal' || a === 'coup' || a === 'assassinate') &&
                 !opponents.some((o) => isAlive(o) && (a !== 'steal' || o.coins > 0)));
+            const isSel = selAction === a;
+            const isBluff = !!role && !myRoles.includes(role);
+            const color = role ? roleColors[role] : a === 'coup' ? theme.colors.danger : theme.colors.gold;
             return (
               <Pressy
                 key={a}
-                scaleTo={0.92}
+                scaleTo={0.96}
                 disabled={disabled}
-                onPress={() => declare(a)}
+                onPress={() => selectAction(a)}
                 style={[
-                  styles.actionChip,
-                  role
-                    ? { borderColor: roleColors[role], backgroundColor: roleColors[role] + '24' }
-                    : null,
-                  a === 'coup' ? styles.coupChip : null,
+                  styles.actionRow,
+                  { borderColor: isSel ? color : theme.colors.border },
+                  isSel && { backgroundColor: color + '1e' },
                 ]}
               >
-                {role ? (
-                  <View style={styles.chipIcons}>
-                    <RolePortrait role={role} size={24} ring={1.5} />
-                    <ActionGlyph action={a} size={17} color={roleColors[role]} />
+                <View style={styles.actionIcon}>
+                  {role ? (
+                    <RolePortrait role={role} size={34} ring={1.5} />
+                  ) : (
+                    <Ionicons
+                      name={a === 'coup' ? 'skull' : a === 'income' ? 'add-circle' : 'cash-outline'}
+                      size={26}
+                      color={color}
+                    />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={[styles.actionHead, rtl && styles.rowReverse]}>
+                    <Text style={[styles.actionName, { color }]} numberOfLines={1}>
+                      {t(label)}
+                    </Text>
+                    {cost !== undefined ? (
+                      <View style={styles.costTag}>
+                        <CoinIcon size={12} />
+                        <Text style={styles.costText}>{cost}</Text>
+                      </View>
+                    ) : null}
+                    {isBluff ? (
+                      <View style={styles.bluffBadge}>
+                        <Text style={styles.bluffText}>{t('bluff')}</Text>
+                      </View>
+                    ) : null}
                   </View>
-                ) : (
-                  <Ionicons
-                    name={a === 'coup' ? 'skull' : a === 'income' ? 'add' : 'cash-outline'}
-                    size={16}
-                    color={a === 'coup' ? theme.colors.danger : theme.colors.goldLight}
-                  />
-                )}
-                <Text style={styles.chipLabel}>{t(label)}</Text>
-                {cost !== undefined ? (
-                  <View style={styles.costTag}>
-                    <CoinIcon size={11} />
-                    <Text style={styles.costText}>{cost}</Text>
-                  </View>
-                ) : null}
+                  <Text style={[styles.actionDesc, rtl && styles.rtlText]} numberOfLines={1}>
+                    {t(desc)}
+                  </Text>
+                </View>
               </Pressy>
             );
           })}
         </View>
+        {sel ? (
+          <Animated.View entering={FadeIn.duration(160)} style={styles.confirmArea}>
+            {sel.role && !myRoles.includes(sel.role) ? (
+              <Text style={styles.bluffHint}>{t('bluffHint')}</Text>
+            ) : null}
+            {awaitingTarget ? (
+              <Text style={styles.targetHint}>{t('chooseTarget')} ↑</Text>
+            ) : (
+              <Pressy
+                scaleTo={0.97}
+                disabled={sending}
+                style={styles.goldBtn}
+                onPress={confirmAction}
+              >
+                <Text style={styles.goldBtnText}>
+                  {t('confirmAction', {
+                    action: `${t(sel.label)}${targetLabel ? ` — ${targetLabel}` : ''}`,
+                  })}
+                </Text>
+              </Pressy>
+            )}
+            <Pressy
+              scaleTo={0.97}
+              style={styles.cancelLink}
+              onPress={() => {
+                setSelAction(null);
+                setSelTarget(null);
+              }}
+            >
+              <Text style={styles.cancelLinkText}>{t('cancel')}</Text>
+            </Pressy>
+          </Animated.View>
+        ) : null}
       </Animated.View>
     );
   } else if (iRespond && pending) {
@@ -337,7 +393,7 @@ export function GameScreen() {
     const blockRoles = g.phase === 'block' ? BLOCK_ROLES[pending.action] ?? [] : [];
 
     panel = (
-      <Animated.View entering={FadeInUp.duration(220)} style={styles.panel}>
+      <Animated.View entering={FadeIn.duration(180)} style={styles.panel}>
         {claimedRole ? (
           <View style={styles.claimRow}>
             <RolePortrait role={claimedRole} size={44} ring={2} />
@@ -399,7 +455,7 @@ export function GameScreen() {
     );
   } else if (iLose) {
     panel = (
-      <Animated.View entering={FadeInUp.duration(220)} style={styles.panel}>
+      <Animated.View entering={FadeIn.duration(180)} style={styles.panel}>
         <Text style={[styles.panelTitle, { color: theme.colors.danger }]}>
           {t('loseCardTitle')}
         </Text>
@@ -426,7 +482,7 @@ export function GameScreen() {
       );
     };
     panel = (
-      <Animated.View entering={FadeInUp.duration(220)} style={styles.panel}>
+      <Animated.View entering={FadeIn.duration(180)} style={styles.panel}>
         <Text style={styles.panelTitle}>{t('exchangeTitle', { n: need })}</Text>
         <View style={styles.exchangeRow}>
           {pool.map((r, i) => (
@@ -462,7 +518,12 @@ export function GameScreen() {
   }
 
   const targetable = (p: PlayerState) =>
-    !!targeting && isAlive(p) && (targeting !== 'steal' || p.coins > 0);
+    isMyTurn &&
+    !!selAction &&
+    needsTarget(selAction) &&
+    !selTarget &&
+    isAlive(p) &&
+    (selAction !== 'steal' || p.coins > 0);
 
   const winner = g.winner ? g.players.find((p) => p.id === g.winner) : null;
   const latestLog = g.log.length > 0 ? g.log[g.log.length - 1] : null;
@@ -470,12 +531,13 @@ export function GameScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <LinearGradient
-        colors={['#1c1610', '#12100d', '#191007']}
+        colors={['#14171d', '#0e1014', '#12141a']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+      <Breathing />
       {/* Header */}
       <View style={[styles.header, rtl && styles.rowReverse]}>
         <Pressy scaleTo={0.85} style={styles.iconBtn} onPress={onLeave} hitSlop={8}>
@@ -508,10 +570,9 @@ export function GameScreen() {
               responding={responders.includes(p.id)}
               targetable={targetable(p)}
               onTarget={() => {
-                if (!targeting) return;
-                const action = targeting;
-                setTargeting(null);
-                dispatch({ type: 'declare', action, target: p.id });
+                if (!targetable(p)) return;
+                haptics.selection();
+                setSelTarget(p.id);
               }}
             />
           ))}
@@ -540,11 +601,12 @@ export function GameScreen() {
                 dead={c.revealed}
                 width={92}
                 selected={iLose && loseIdx === i}
+                tilt={i === 0 ? -3 : 3}
               />
             </Pressy>
           ))}
         </View>
-        <Animated.View layout={LinearTransition.springify().damping(19)}>{panel}</Animated.View>
+        <View>{panel}</View>
       </View>
 
       {/* Win overlay */}
@@ -762,42 +824,82 @@ const makeStyles = (theme: Theme) =>
       marginTop: -6,
     },
     actionGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-      justifyContent: 'center',
+      gap: 6,
     },
-    actionChip: {
+    actionRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: 10,
       backgroundColor: theme.colors.surface,
       borderWidth: 1.5,
-      borderColor: theme.colors.borderBright,
+      borderRadius: theme.radius.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    actionIcon: {
+      width: 36,
+      alignItems: 'center',
+    },
+    actionHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    actionName: {
+      fontSize: 13.5,
+      fontFamily: font('bold'),
+    },
+    actionDesc: {
+      fontSize: 11,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
+      marginTop: -1,
+    },
+    bluffBadge: {
+      backgroundColor: 'rgba(232, 163, 61, 0.16)',
+      borderWidth: 1,
+      borderColor: theme.colors.warning,
       borderRadius: theme.radius.pill,
-      paddingHorizontal: 12,
-      height: 40,
+      paddingHorizontal: 7,
+      paddingVertical: 0.5,
     },
-    coupChip: {
-      borderColor: theme.colors.danger,
-      backgroundColor: 'rgba(217, 83, 79, 0.16)',
+    bluffText: {
+      fontSize: 9.5,
+      fontFamily: font('bold'),
+      color: theme.colors.warning,
     },
-    chipDisabled: {
-      opacity: 0.35,
+    confirmArea: {
+      gap: 6,
+      alignItems: 'center',
     },
     claimRow: {
       alignItems: 'center',
       marginBottom: -2,
     },
-    chipIcons: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
+    chipDisabled: {
+      opacity: 0.35,
     },
-    chipLabel: {
+    bluffHint: {
+      fontSize: 11.5,
+      fontFamily: font('semibold'),
+      color: theme.colors.warning,
+      textAlign: 'center',
+    },
+    targetHint: {
       fontSize: 13,
       fontFamily: font('bold'),
-      color: theme.colors.ink,
+      color: theme.colors.danger,
+      textAlign: 'center',
+      paddingVertical: 8,
+    },
+    cancelLink: {
+      paddingVertical: 4,
+      paddingHorizontal: 16,
+    },
+    cancelLinkText: {
+      fontSize: 12.5,
+      fontFamily: font('bold'),
+      color: theme.colors.inkFaint,
     },
     costTag: {
       flexDirection: 'row',
