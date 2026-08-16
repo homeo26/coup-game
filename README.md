@@ -15,7 +15,7 @@ flowchart LR
         B[Player B]
         C[Player C…]
     end
-    subgraph Firebase["🔥 Firebase (lawazempack4)"]
+    subgraph Firebase["🔥 Firebase (coup-game-rooms)"]
         FS[(Firestore
 coup_rooms/{code})]
     end
@@ -84,7 +84,7 @@ npx expo run:android          # or run:ios
 npm test
 
 # local end-to-end against the Firestore emulator
-(cd emulator && firebase emulators:start --project lawazempack4)
+firebase emulators:start   # uses firebase.json + .firebaserc (coup-game-rooms)
 EXPO_PUBLIC_FIRESTORE_EMULATOR=10.0.2.2:8080 npx expo run:android
 FIRESTORE_EMULATOR=localhost:8080 npx tsx scripts/integration.test.ts
 FIRESTORE_EMULATOR=localhost:8080 npx tsx scripts/bot.ts auto CODE Bot1
@@ -107,10 +107,14 @@ Produces in `release-out/`:
 
 ## Firestore rules
 
-Rooms live in the `coup_rooms` collection of the shared `lawazempack4`
-project; the rules block is maintained in the `lawazem` repo's
+The game has its **own Firebase project** (`coup-game-rooms`) — fully
+separate from the Lawazem apps. Rules live in this repo's
 `firestore.rules` (public read/write with structure + size validation,
-6-player cap).
+6-player cap) and deploy with:
+
+```bash
+firebase deploy --only firestore:rules
+```
 
 ## License
 

@@ -1,18 +1,18 @@
 /**
  * Firebase — Firestore only (web SDK). Rooms live in the `coup_rooms`
- * collection of the lawazempack4 project (shared with the Lawazem apps;
- * this collection is isolated by security rules).
+ * collection of the dedicated `coup-game-rooms` project (its own data
+ * store, fully separate from the Lawazem apps).
  */
 import { initializeApp } from 'firebase/app';
 import { connectFirestoreEmulator, getFirestore, initializeFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyDWfIrhOCq_urMb8gfr3n8a8iNYRZXJQCc',
-  authDomain: 'lawazempack4.firebaseapp.com',
-  projectId: 'lawazempack4',
-  storageBucket: 'lawazempack4.firebasestorage.app',
-  messagingSenderId: '454755079835',
-  appId: '1:454755079835:web:5af26ded7c98cbddbe183e',
+  apiKey: 'AIzaSyDqPtVwQjzmchGrPe5rqM8AMSURWdoHzb4',
+  authDomain: 'coup-game-rooms.firebaseapp.com',
+  projectId: 'coup-game-rooms',
+  storageBucket: 'coup-game-rooms.firebasestorage.app',
+  messagingSenderId: '902436972116',
+  appId: '1:902436972116:web:1e2c2588fe8230c553efc1',
 };
 
 export const app = initializeApp(firebaseConfig);

@@ -17,7 +17,7 @@ import {
 import { apply, isAlive, newGame, pendingResponders } from '../src/engine/engine';
 import { GameState, Move } from '../src/engine/types';
 
-const app = initializeApp({ projectId: 'lawazempack4', apiKey: 'x', appId: 'x' });
+const app = initializeApp({ projectId: 'coup-game-rooms', apiKey: 'x', appId: 'x' });
 const db = getFirestore(app);
 const emu = process.env.FIRESTORE_EMULATOR ?? 'localhost:8080';
 connectFirestoreEmulator(db, emu.split(':')[0], parseInt(emu.split(':')[1], 10));
