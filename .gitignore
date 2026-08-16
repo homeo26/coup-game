@@ -29,3 +29,7 @@ Thumbs.db
 
 # Metro
 .metro-health-check*
+
+# Firebase emulator logs
+firebase-debug.log
+firestore-debug.log
