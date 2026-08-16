@@ -224,6 +224,8 @@ export const dict = {
   language: { en: 'Language', ar: 'اللغة' },
   hapticsSetting: { en: 'Haptic feedback', ar: 'الاهتزاز عند اللمس' },
   hapticsDesc: { en: 'Tactile feedback on taps', ar: 'ردة فعل لمسية عند الضغط' },
+  soundsSetting: { en: 'Sound effects', ar: 'المؤثرات الصوتية' },
+  soundsDesc: { en: 'Cards, coins and table sounds', ar: 'أصوات البطاقات والعملات والطاولة' },
   about: { en: 'About', ar: 'حول' },
   aboutText: {
     en: 'A fan-made digital adaptation of the card game Coup for playing with friends — each on their own device.',

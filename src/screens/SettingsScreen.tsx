@@ -10,6 +10,7 @@ import { Pressy } from '../components/Pressy';
 import { useSettings } from '../settings';
 import { t, isRTL, Lang } from '../i18n';
 import * as haptics from '../haptics';
+import * as sound from '../sound';
 
 export function SettingsScreen() {
   const theme = useTheme();
@@ -73,6 +74,27 @@ export function SettingsScreen() {
               style={[styles.toggle, settings.haptics && styles.toggleOn]}
             >
               <View style={[styles.thumb, settings.haptics && styles.thumbOn]} />
+            </Pressy>
+          </View>
+        </View>
+
+        {/* Sounds */}
+        <View style={styles.card}>
+          <View style={[styles.row, rtl && styles.rowReverse]}>
+            <Ionicons name="volume-medium" size={20} color={theme.colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowTitle, rtlText]}>{t('soundsSetting')}</Text>
+              <Text style={[styles.rowDesc, rtlText]}>{t('soundsDesc')}</Text>
+            </View>
+            <Pressy
+              scaleTo={0.9}
+              onPress={() => {
+                settings.set('sounds', !settings.sounds);
+                if (!settings.sounds) sound.play('coins'); // preview when turning ON
+              }}
+              style={[styles.toggle, settings.sounds && styles.toggleOn]}
+            >
+              <View style={[styles.thumb, settings.sounds && styles.thumbOn]} />
             </Pressy>
           </View>
         </View>

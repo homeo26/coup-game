@@ -47,6 +47,7 @@ import {
 } from '../engine/types';
 import { t, TKey, isRTL } from '../i18n';
 import * as haptics from '../haptics';
+import * as sound from '../sound';
 
 /* ------------------------------------------------------------------ */
 /* Log formatting                                                      */
@@ -113,6 +114,41 @@ function logMeta(e: LogEntry, th: Theme): { icon: keyof typeof Ionicons.glyphMap
       return { icon: 'trophy', color: th.colors.goldLight };
     default:
       return { icon: 'ellipse-outline', color: th.colors.inkSoft };
+  }
+}
+
+/** Which cue a game event plays (null = silent). */
+function logSound(key: string): sound.SoundKey | null {
+  switch (key) {
+    case 'logIncome':
+    case 'logForeignAid':
+    case 'logTax':
+    case 'logSteal':
+      return 'coins';
+    case 'logDeclared':
+    case 'logForeignAidDeclared':
+      return 'claim';
+    case 'logBlockDeclared':
+    case 'logForeignAidBlocked':
+    case 'logStealBlocked':
+    case 'logAssassinateBlocked':
+      return 'block';
+    case 'logChallenge':
+      return 'challenge';
+    case 'logChallengeFailed':
+    case 'logChallengeWon':
+    case 'logLostCard':
+      return 'fail';
+    case 'logCoup':
+    case 'logAssassinate':
+      return 'kill';
+    case 'logEliminated':
+    case 'logForfeit':
+      return 'lose';
+    case 'logExchange':
+      return 'shuffle';
+    default:
+      return null;
   }
 }
 
@@ -395,7 +431,10 @@ export function GameScreen() {
   // A gentle nudge when the game starts waiting on me
   const needed = useRef(false);
   useEffect(() => {
-    if (needsMe && !needed.current) haptics.medium();
+    if (needsMe && !needed.current) {
+      haptics.medium();
+      sound.play('turn');
+    }
     needed.current = needsMe;
   }, [needsMe]);
 
@@ -415,7 +454,14 @@ export function GameScreen() {
     const prev = seenLen.current;
     seenLen.current = logLen;
     if (logLen > prev && g) {
-      setBanner({ entry: g.log[logLen - 1], key: logLen });
+      const entry = g.log[logLen - 1];
+      if (entry.key === 'logWinner') {
+        sound.play(g.winner && g.winner === myId ? 'win' : 'lose');
+      } else {
+        const cue = logSound(entry.key);
+        if (cue) sound.play(cue);
+      }
+      setBanner({ entry, key: logLen });
       const timer = setTimeout(() => setBanner((b) => (b?.key === logLen ? null : b)), 2100);
       return () => clearTimeout(timer);
     }
@@ -430,6 +476,7 @@ export function GameScreen() {
     setSending(true);
     try {
       haptics.light();
+      sound.play('tap');
       const err = await move(m);
       if (err) console.log('move rejected:', err);
     } catch {

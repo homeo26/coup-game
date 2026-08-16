@@ -10,12 +10,14 @@ import { Lang, getLang, setLang } from './i18n';
 export interface Settings {
   lang: Lang;
   haptics: boolean;
+  sounds: boolean;
   playerName: string;
 }
 
 const DEFAULTS: Settings = {
   lang: getLang(),
   haptics: true,
+  sounds: true,
   playerName: '',
 };
 

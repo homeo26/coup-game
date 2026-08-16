@@ -126,6 +126,11 @@ separate from the Lawazem apps. Rules live in this repo's
 firebase deploy --only firestore:rules
 ```
 
+## Credits
+
+Sound effects from [Kenney](https://kenney.nl)'s *Casino Audio* and
+*Interface Sounds* packs (CC0 — public domain).
+
 ## License
 
 Private. Coup game design by Rikki Tahta / Indie Boards & Cards — this
