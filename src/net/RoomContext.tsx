@@ -139,7 +139,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         const m = decideBot(g, botId);
         if (!m) return { ...g }; // retrigger — another bot may owe a move
         const r = apply(g, botId, m);
-        if (!r.error && Math.random() < 0.14) {
+        if (!r.error && Math.random() < 0.2) {
           // Bots have feelings too — an occasional emote after acting.
           const bot = g.players.find((p) => p.id === botId);
           if (bot) {

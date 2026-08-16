@@ -47,7 +47,9 @@ async function join() {
     if (roster.some((p) => p.id === myId)) return;
     if (data.status !== 'lobby') throw new Error('already started');
     if (roster.length >= 6) throw new Error('full');
-    tx.update(ref, { roster: [...roster, { id: myId, name }], updatedAt: serverTimestamp() });
+    const avatars = ['duke', 'captain', 'contessa', 'assassin', 'ambassador'];
+    const avatar = avatars[roster.length % avatars.length];
+    tx.update(ref, { roster: [...roster, { id: myId, name, avatar }], updatedAt: serverTimestamp() });
   });
   console.log(`[${name}] joined ${code}`);
 }
@@ -75,6 +77,29 @@ async function moveOnce(m: Move): Promise<string | null> {
 }
 
 async function main() {
+  if (cmd === 'chat') {
+    // One-shot chat message: bot.ts chat CODE NAME "text"  (moveJson = text)
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('room gone');
+      const chat = [...((snap.data()?.chat as unknown[]) ?? [])];
+      chat.push({ u: myId, n: name, a: 'captain', k: 'text', v: moveJson ?? 'hi', ts: Date.now() });
+      tx.update(ref, { chat: chat.slice(-40), updatedAt: serverTimestamp() });
+    });
+    console.log(`[${name}] chat sent`);
+    process.exit(0);
+  }
+  if (cmd === 'emote') {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('room gone');
+      const chat = [...((snap.data()?.chat as unknown[]) ?? [])];
+      chat.push({ u: myId, n: name, a: 'duke', k: 'emote', v: moveJson ?? '🔥', ts: Date.now() });
+      tx.update(ref, { chat: chat.slice(-40), updatedAt: serverTimestamp() });
+    });
+    console.log(`[${name}] emote sent`);
+    process.exit(0);
+  }
   if (cmd === 'move') {
     // One-shot scripted move (testing): bot.ts move CODE NAME '{"type":...}'
     const err = await moveOnce(JSON.parse(moveJson!) as Move);

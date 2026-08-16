@@ -17,6 +17,7 @@ import Animated, {
   FadeInDown,
   FadeOut,
   LinearTransition,
+  SlideInDown,
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
@@ -764,11 +765,26 @@ export function GameScreen() {
       </Animated.View>
     );
   } else if (iLose) {
+    const choices = me.cards.map((c, i) => ({ c, i })).filter(({ c }) => !c.revealed);
     panel = (
       <Animated.View entering={FadeIn.duration(180)} style={styles.panel}>
         <Text style={[styles.panelTitle, { color: theme.colors.danger }]}>
           {t('loseCardTitle')}
         </Text>
+        <View style={styles.exchangeRow}>
+          {choices.map(({ c, i }) => (
+            <Pressy
+              key={i}
+              scaleTo={0.93}
+              onPress={() => {
+                haptics.selection();
+                setLoseIdx(i);
+              }}
+            >
+              <InfluenceCard role={c.role} width={72} selected={loseIdx === i} />
+            </Pressy>
+          ))}
+        </View>
         {loseIdx !== null ? (
           <Pressy
             scaleTo={0.94}
@@ -821,7 +837,7 @@ export function GameScreen() {
       <Animated.View
         key={`wait-${current?.id ?? ''}-${g.phase}`}
         entering={FadeIn.duration(320)}
-        style={styles.panel}
+        style={[styles.panel, styles.panelInline]}
       >
         <View style={[styles.waitRow, rtl && styles.rowReverse]}>
           <Ionicons name="hourglass-outline" size={15} color={theme.colors.inkSoft} />
@@ -982,8 +998,22 @@ export function GameScreen() {
             </Pressy>
           ))}
         </View>
-        <View>{panel}</View>
+        {!needsMe ? <View>{panel}</View> : null}
       </View>
+
+      {/* Bottom sheet: whenever the game needs YOUR input, the panel
+          rises from the bottom edge — it can never be pushed off-screen
+          by a full table. Seats stay visible and tappable above it. */}
+      {needsMe && g.phase !== 'game_over' ? (
+        <Animated.View
+          key={`sheet-${g.phase}`}
+          entering={SlideInDown.duration(320)}
+          style={styles.sheet}
+        >
+          <View style={styles.sheetHandle} />
+          {panel}
+        </Animated.View>
+      ) : null}
 
       {/* Game over — final standings */}
       {g.phase === 'game_over' && winner ? (
@@ -1414,15 +1444,42 @@ const makeStyles = (theme: Theme) =>
       justifyContent: 'center',
       gap: 12,
     },
-    panel: {
+    sheet: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
       backgroundColor: theme.colors.surfaceElevated,
-      borderRadius: theme.radius.md,
+      borderTopLeftRadius: 22,
+      borderTopRightRadius: 22,
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderBottomWidth: 0,
+      borderColor: theme.colors.borderBright,
+      paddingHorizontal: 12,
+      paddingBottom: 12,
+      paddingTop: 6,
+      ...theme.shadow.card,
+      zIndex: 20,
+    },
+    sheetHandle: {
+      alignSelf: 'center',
+      width: 44,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.colors.borderBright,
+      marginBottom: 6,
+    },
+    panel: {
+      borderRadius: theme.radius.md,
       padding: 12,
       gap: 10,
       minHeight: 58,
       justifyContent: 'center',
+    },
+    panelInline: {
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
     },
     panelTitle: {
       fontSize: 14,

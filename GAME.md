@@ -224,6 +224,19 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   coin counts pulse on change; the turn glow **fades between seats**
   (border tint + halo ease in/out, small scale nudge on the new turn
   holder); panels cross-fade per turn/phase.
+- Whenever the game needs the player's input, the phase panel rises as
+  a **bottom sheet** anchored to the screen edge — it can never be
+  pushed off-screen by a full table; seats stay visible and tappable
+  above it (the card-loss picker offers the cards inside the sheet).
+- **In-room chat** (`chat[]` on the room doc, capped at 40 entries):
+  its own tab appears while in a room, with an unread badge, quick
+  emote row, and canned taunts. Emotes/taunts float over the sender's
+  seat for ~3.5s. Offline bots emote occasionally after moves.
+- **Avatars**: each player picks one of the five character portraits on
+  the Home screen (persisted); shown in the lobby, seat rows, chat and
+  final standings. Offline bots get distinct portraits by seat.
+- **Table music**: a quiet CC0 inn loop plays while in a room
+  (settings toggle), alongside per-event sound effects.
 - Full Arabic + English; layout direction is applied manually per
   component (native direction stays LTR).
 - 10+ coins: UI disables everything except Coup and says why.
