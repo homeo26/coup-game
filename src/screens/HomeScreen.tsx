@@ -31,7 +31,7 @@ import * as haptics from '../haptics';
 export function HomeScreen() {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
-  const { lang, playerName, set, hydrated } = useSettings();
+  const { lang, playerName, avatar, set, hydrated } = useSettings();
   const { create, join, playLocal, busy } = useRoom();
   const [name, setName] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState('');
@@ -129,17 +129,35 @@ export function HomeScreen() {
               resizeMode="contain"
             />
             <Text style={styles.tag}>{t('homeTag')}</Text>
-            {/* the cast — staggered entrance, alternating lift */}
+            {/* the cast — pick your avatar */}
+            <Text style={styles.avatarLabel}>{t('avatarLabel')}</Text>
             <View style={styles.cast}>
-              {ROLES.map((r, i) => (
-                <Animated.View
-                  key={r}
-                  entering={FadeInDown.duration(380).delay(140 + i * 70)}
-                  style={{ transform: [{ translateY: i % 2 === 0 ? 0 : 10 }] }}
-                >
-                  <RolePortrait role={r} size={58} ring={2.5} />
-                </Animated.View>
-              ))}
+              {ROLES.map((r, i) => {
+                const selected = avatar === r;
+                return (
+                  <Animated.View
+                    key={r}
+                    entering={FadeInDown.duration(380).delay(140 + i * 70)}
+                    style={{ transform: [{ translateY: i % 2 === 0 ? 0 : 10 }] }}
+                  >
+                    <Pressy
+                      scaleTo={0.88}
+                      onPress={() => {
+                        haptics.selection();
+                        set('avatar', r);
+                      }}
+                      style={[styles.avatarWrap, selected && styles.avatarSel]}
+                    >
+                      <RolePortrait role={r} size={selected ? 60 : 52} ring={selected ? 3 : 2} />
+                      {selected ? (
+                        <View style={styles.avatarCheck}>
+                          <Ionicons name="checkmark" size={11} color={theme.colors.inkOnGold} />
+                        </View>
+                      ) : null}
+                    </Pressy>
+                  </Animated.View>
+                );
+              })}
             </View>
           </Animated.View>
 
@@ -261,9 +279,37 @@ const makeStyles = (theme: Theme) =>
     },
     cast: {
       flexDirection: 'row',
-      gap: 10,
-      marginTop: 16,
+      gap: 8,
+      marginTop: 6,
       alignItems: 'center',
+      height: 72,
+    },
+    avatarLabel: {
+      fontSize: 12,
+      fontFamily: font('bold'),
+      color: theme.colors.inkSoft,
+      marginTop: 12,
+    },
+    avatarWrap: {
+      width: 64,
+      height: 64,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 32,
+    },
+    avatarSel: {
+      backgroundColor: 'rgba(212, 168, 84, 0.14)',
+    },
+    avatarCheck: {
+      position: 'absolute',
+      bottom: 2,
+      right: 2,
+      width: 17,
+      height: 17,
+      borderRadius: 9,
+      backgroundColor: theme.colors.gold,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     card: {
       backgroundColor: theme.colors.surface,

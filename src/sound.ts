@@ -24,6 +24,7 @@ const SOURCES = {
   win: require('../assets/sounds/win.m4a'), // victory
   lose: require('../assets/sounds/lose.m4a'), // eliminated
   tap: require('../assets/sounds/tap.m4a'), // confirm press
+  chat: require('../assets/sounds/chat.m4a'), // incoming chat message
 } as const;
 
 export type SoundKey = keyof typeof SOURCES;

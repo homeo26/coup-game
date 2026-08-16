@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
+import { ChatScreen } from '../src/screens/ChatScreen';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { LobbyScreen } from '../src/screens/LobbyScreen';
 import { GameScreen } from '../src/screens/GameScreen';
@@ -14,6 +15,9 @@ import { RulesScreen } from '../src/screens/RulesScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { TabBar } from '../src/components/TabBar';
 import { useRoom } from '../src/net/RoomContext';
+import { useSettings } from '../src/settings';
+import * as music from '../src/music';
+import * as sound from '../src/sound';
 import { Theme, useStyles } from '../src/theme';
 
 function PlayTab() {
@@ -27,13 +31,38 @@ export default function TabsHost() {
   const styles = useStyles(makeStyles);
   const pagerRef = useRef<PagerView>(null);
   const [page, setPage] = useState(0);
-  const { room } = useRoom();
+  const [chatSeen, setChatSeen] = useState(0);
+  const { room, myId } = useRoom();
+  const { music: musicOn } = useSettings();
 
   // Joining/creating a room snaps back to the Play tab.
   const roomCode = room?.code ?? null;
   useEffect(() => {
     if (roomCode) pagerRef.current?.setPage(0);
+    setChatSeen(0);
   }, [roomCode]);
+
+  // Table music plays while you're in a room (and the toggle is on).
+  useEffect(() => {
+    if (roomCode && musicOn) music.start();
+    else music.stop();
+  }, [roomCode, musicOn]);
+
+  // Unread chat: everything after the last time the chat tab was open.
+  const chatLen = room?.chat.length ?? 0;
+  useEffect(() => {
+    if (page === 1) setChatSeen(chatLen);
+  }, [page, chatLen]);
+  const lastMsg = chatLen > 0 ? room!.chat[chatLen - 1] : null;
+  const prevLen = useRef(chatLen);
+  useEffect(() => {
+    // ping for incoming messages while the chat tab is closed
+    if (chatLen > prevLen.current && page !== 1 && lastMsg && lastMsg.u !== myId) {
+      sound.play('chat');
+    }
+    prevLen.current = chatLen;
+  }, [chatLen, page, lastMsg, myId]);
+  const chatBadge = page === 1 ? 0 : Math.max(0, chatLen - chatSeen);
 
   // Android hardware back: return to the Play tab first, then exit.
   useEffect(() => {
@@ -53,11 +82,14 @@ export default function TabsHost() {
         ref={pagerRef}
         style={styles.pager}
         initialPage={0}
-        offscreenPageLimit={2}
+        offscreenPageLimit={3}
         onPageSelected={(e) => setPage(e.nativeEvent.position)}
       >
         <View key="play" style={styles.page}>
           <PlayTab />
+        </View>
+        <View key="chat" style={styles.page}>
+          <ChatScreen />
         </View>
         <View key="rules" style={styles.page}>
           <RulesScreen />
@@ -66,7 +98,12 @@ export default function TabsHost() {
           <SettingsScreen />
         </View>
       </PagerView>
-      <TabBar activeIndex={page} onPress={(i) => pagerRef.current?.setPage(i)} />
+      <TabBar
+        activeIndex={page}
+        onPress={(i) => pagerRef.current?.setPage(i)}
+        showChat={!!room}
+        chatBadge={chatBadge}
+      />
     </View>
   );
 }

@@ -231,12 +231,16 @@ function AnimatedCoins({ amount, size }: { amount: number; size: number }) {
  */
 function SeatRow({
   p,
+  avatar,
+  emote,
   isTurn,
   responding,
   targetable,
   onTarget,
 }: {
   p: PlayerState;
+  avatar?: string;
+  emote?: string | null;
   isTurn: boolean;
   responding: boolean;
   targetable: boolean;
@@ -302,6 +306,7 @@ function SeatRow({
             <View style={styles.seatIdleDot} />
           )}
         </View>
+        {avatar ? <RolePortrait role={avatar as Role} size={30} ring={1.5} /> : null}
         <Text
           style={[styles.seatRowName, rtl && styles.rtlText, dead && styles.seatRowNameDead]}
           numberOfLines={1}
@@ -322,6 +327,17 @@ function SeatRow({
         </View>
         </Pressy>
       </Animated.View>
+      {emote ? (
+        <Animated.View
+          key={emote}
+          entering={FadeInDown.duration(250)}
+          exiting={FadeOut.duration(300)}
+          pointerEvents="none"
+          style={[styles.emoteBubble, rtl ? { left: 10 } : { right: 10 }]}
+        >
+          <Text style={styles.emoteBubbleText}>{emote}</Text>
+        </Animated.View>
+      ) : null}
     </Animated.View>
   );
 }
@@ -416,6 +432,28 @@ export function GameScreen() {
   void lang;
 
   const g = room?.game as GameState | undefined;
+  const chat = room?.chat;
+
+  // Floating emotes: latest emote/taunt per player from the last few
+  // seconds of chat; a ticker clears them after they expire.
+  const [emoteTick, setEmoteTick] = useState(0);
+  const emotes = useMemo(() => {
+    void emoteTick;
+    const now = Date.now();
+    const map = new Map<string, string>();
+    for (const m of chat ?? []) {
+      if ((m.k === 'emote' || m.k === 'taunt') && now - m.ts < 3500) {
+        map.set(m.u, m.k === 'taunt' ? t(m.v as TKey) : m.v);
+      }
+    }
+    return map;
+  }, [chat, emoteTick]);
+  useEffect(() => {
+    if (emotes.size === 0) return;
+    const timer = setInterval(() => setEmoteTick((x) => x + 1), 1200);
+    return () => clearInterval(timer);
+  }, [emotes.size]);
+  const avatarOf = (id: string) => room?.roster.find((r) => r.id === id)?.avatar;
 
   // Derivations (safe even while g flickers during snapshots)
   const me = useMemo(() => g?.players.find((p) => p.id === myId), [g, myId]);
@@ -862,6 +900,8 @@ export function GameScreen() {
           <SeatRow
             key={p.id}
             p={p}
+            avatar={avatarOf(p.id)}
+            emote={emotes.get(p.id) ?? null}
             isTurn={current?.id === p.id && g.phase !== 'game_over'}
             responding={responders.includes(p.id)}
             targetable={targetable(p)}
@@ -903,7 +943,22 @@ export function GameScreen() {
       {/* My area */}
       <View style={styles.myArea}>
         <View style={[styles.myHead, rtl && styles.rowReverse]}>
-          <Text style={styles.myName}>{me.name}</Text>
+          <View style={[styles.myIdent, rtl && styles.rowReverse]}>
+            {avatarOf(me.id) ? (
+              <RolePortrait role={avatarOf(me.id) as Role} size={26} ring={1.5} />
+            ) : null}
+            <Text style={styles.myName}>{me.name}</Text>
+            {emotes.get(me.id) ? (
+              <Animated.Text
+                key={emotes.get(me.id)}
+                entering={FadeInDown.duration(250)}
+                exiting={FadeOut.duration(300)}
+                style={styles.myEmote}
+              >
+                {emotes.get(me.id)}
+              </Animated.Text>
+            ) : null}
+          </View>
           <AnimatedCoins amount={me.coins} size={20} />
         </View>
         <View style={styles.hand}>
@@ -966,6 +1021,9 @@ export function GameScreen() {
                         </Text>
                       )}
                     </View>
+                    {avatarOf(p.id) ? (
+                      <RolePortrait role={avatarOf(p.id) as Role} size={26} ring={1.5} />
+                    ) : null}
                     <Text
                       style={[
                         styles.standingName,
@@ -1139,6 +1197,32 @@ const makeStyles = (theme: Theme) =>
       height: 6,
       borderRadius: 3,
       backgroundColor: theme.colors.borderBright,
+    },
+    emoteBubble: {
+      position: 'absolute',
+      top: -14,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1.5,
+      borderColor: theme.colors.goldDark,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      maxWidth: 220,
+      ...theme.shadow.card,
+    },
+    emoteBubbleText: {
+      fontSize: 17,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+    },
+    myIdent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexShrink: 1,
+    },
+    myEmote: {
+      fontSize: 17,
     },
     seatRowName: {
       flex: 1,

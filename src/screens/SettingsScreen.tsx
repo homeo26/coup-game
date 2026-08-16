@@ -99,6 +99,24 @@ export function SettingsScreen() {
           </View>
         </View>
 
+        {/* Music */}
+        <View style={styles.card}>
+          <View style={[styles.row, rtl && styles.rowReverse]}>
+            <Ionicons name="musical-notes" size={20} color={theme.colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowTitle, rtlText]}>{t('musicSetting')}</Text>
+              <Text style={[styles.rowDesc, rtlText]}>{t('musicDesc')}</Text>
+            </View>
+            <Pressy
+              scaleTo={0.9}
+              onPress={() => settings.set('music', !settings.music)}
+              style={[styles.toggle, settings.music && styles.toggleOn]}
+            >
+              <View style={[styles.thumb, settings.music && styles.thumbOn]} />
+            </Pressy>
+          </View>
+        </View>
+
         {/* About */}
         <View style={styles.card}>
           <View style={[styles.row, rtl && styles.rowReverse]}>

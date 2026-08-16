@@ -17,6 +17,7 @@ import { apply, newGame } from '../engine/engine';
 import { decideBot } from '../ai';
 import { t } from '../i18n';
 import {
+  ChatMsg,
   Room,
   commitMove,
   createRoom,
@@ -26,9 +27,12 @@ import {
   leaveRoom,
   playAgain,
   saveActiveRoom,
+  sendChat as sendChatRemote,
   startGame,
   watchRoom,
+  CHAT_CAP,
 } from './rooms';
+import { getSettings } from '../settings';
 
 export const LOCAL_CODE = 'BOTS';
 
@@ -46,6 +50,7 @@ interface RoomState {
   playLocal: (name: string, bots: number) => void;
   start: () => Promise<void>;
   move: (m: Move) => Promise<string | null>;
+  sendChat: (msg: Omit<ChatMsg, 'u' | 'ts'>) => Promise<void>;
   leave: () => Promise<void>;
   again: () => Promise<void>;
 }
@@ -61,9 +66,15 @@ const RoomContext = createContext<RoomState>({
   playLocal: () => {},
   start: async () => {},
   move: async () => null,
+  sendChat: async () => {},
   leave: async () => {},
   again: async () => {},
 });
+
+/** Emoji palette bots draw from when they feel chatty. */
+const BOT_EMOTES = ['😏', '😂', '🤔', '😱', '🔥', '💀', '👑'];
+/** Distinct character avatars handed to offline bots by seat. */
+const ROLES_FOR_BOTS = ['duke', 'captain', 'contessa', 'assassin', 'ambassador'];
 
 export function RoomProvider({ children }: { children: React.ReactNode }) {
   const [myId, setMyId] = useState<string | null>(null);
@@ -71,6 +82,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
   const [room, setRoom] = useState<Room | null>(null);
   const [busy, setBusy] = useState(true);
   const [localGame, setLocalGame] = useState<GameState | null>(null);
+  const [localChat, setLocalChat] = useState<ChatMsg[]>([]);
   const unsubRef = useRef<(() => void) | null>(null);
   const botTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -127,6 +139,25 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         const m = decideBot(g, botId);
         if (!m) return { ...g }; // retrigger — another bot may owe a move
         const r = apply(g, botId, m);
+        if (!r.error && Math.random() < 0.14) {
+          // Bots have feelings too — an occasional emote after acting.
+          const bot = g.players.find((p) => p.id === botId);
+          if (bot) {
+            const emote = BOT_EMOTES[Math.floor(Math.random() * BOT_EMOTES.length)];
+            setTimeout(() => {
+              setLocalChat((c) =>
+                [...c, {
+                  u: botId,
+                  n: bot.name,
+                  a: (botId.match(/bot-(\d)/) && ROLES_FOR_BOTS[(parseInt(botId.split('-')[1], 10) - 1) % 5]) || undefined,
+                  k: 'emote' as const,
+                  v: emote,
+                  ts: Date.now(),
+                }].slice(-CHAT_CAP),
+              );
+            }, 500);
+          }
+        }
         return r.error ? { ...g } : r.state;
       });
     }, 650 + Math.random() * 650);
@@ -140,13 +171,15 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       if (!myId) return;
       const n = Math.max(1, Math.min(5, bots));
       const roster = [
-        { id: myId, name },
+        { id: myId, name, avatar: getSettings().avatar },
         ...Array.from({ length: n }, (_, i) => ({
           id: `bot-${i + 1}`,
           name: t('botName', { n: i + 1 }),
+          avatar: ROLES_FOR_BOTS[i % 5],
         })),
       ];
       detach();
+      setLocalChat([]);
       setLocalGame(newGame(roster));
     },
     [myId, detach],
@@ -158,7 +191,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     async (name: string) => {
       setBusy(true);
       try {
-        const newCode = await createRoom(name);
+        const newCode = await createRoom(name, getSettings().avatar);
         attach(newCode);
       } finally {
         setBusy(false);
@@ -171,7 +204,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     async (joinCode: string, name: string) => {
       setBusy(true);
       try {
-        await joinRoom(joinCode, name);
+        await joinRoom(joinCode, name, getSettings().avatar);
         attach(joinCode);
       } finally {
         setBusy(false);
@@ -197,10 +230,22 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     [code, localGame, myId],
   );
 
+  const sendChat = useCallback(
+    async (msg: Omit<ChatMsg, 'u' | 'ts'>) => {
+      if (localGame && myId) {
+        setLocalChat((c) => [...c, { ...msg, u: myId, ts: Date.now() }].slice(-CHAT_CAP));
+        return;
+      }
+      if (code) await sendChatRemote(code, msg).catch(() => {});
+    },
+    [code, localGame, myId],
+  );
+
   const leave = useCallback(async () => {
     if (localGame) {
       if (botTimer.current) clearTimeout(botTimer.current);
       setLocalGame(null);
+      setLocalChat([]);
       return;
     }
     const c = code;
@@ -223,13 +268,18 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       return {
         code: LOCAL_CODE,
         hostId: myId,
-        status: 'playing',
-        roster: localGame.players.map((p) => ({ id: p.id, name: p.name })),
+        status: 'playing' as const,
+        roster: localGame.players.map((p) => ({
+          id: p.id,
+          name: p.name,
+          avatar: p.id === myId ? getSettings().avatar : ROLES_FOR_BOTS[(parseInt(p.id.split('-')[1] ?? '1', 10) - 1) % 5],
+        })),
+        chat: localChat,
         game: localGame,
       };
     }
     return room;
-  }, [localGame, myId, room]);
+  }, [localGame, localChat, myId, room]);
 
   const value = useMemo(
     () => ({
@@ -243,10 +293,11 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       playLocal,
       start,
       move,
+      sendChat,
       leave,
       again,
     }),
-    [myId, code, effectiveRoom, isLocal, busy, create, join, playLocal, start, move, leave, again],
+    [myId, code, effectiveRoom, isLocal, busy, create, join, playLocal, start, move, sendChat, leave, again],
   );
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;

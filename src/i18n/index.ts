@@ -13,6 +13,7 @@ export const dict = {
   appName: { en: 'Coup', ar: 'كوب' },
   tabPlay: { en: 'Play', ar: 'اللعب' },
   tabRules: { en: 'Rules', ar: 'القواعد' },
+  tabChat: { en: 'Chat', ar: 'الدردشة' },
   tabSettings: { en: 'More', ar: 'المزيد' },
 
   // Home
@@ -111,6 +112,25 @@ export const dict = {
   backHome: { en: 'Back to home', ar: 'العودة للرئيسية' },
   ok: { en: 'OK', ar: 'حسناً' },
   cancel: { en: 'Cancel', ar: 'إلغاء' },
+
+  // Chat, emotes & taunts
+  chatTitle: { en: 'Table chat', ar: 'دردشة الطاولة' },
+  chatPlaceholder: { en: 'Say something…', ar: 'اكتب شيئاً…' },
+  chatEmpty: {
+    en: 'No messages yet — talk some trash.',
+    ar: 'لا رسائل بعد — ابدأ المناوشة.',
+  },
+  chatJoinFirst: {
+    en: 'Join a game first — the table chat lives here.',
+    ar: 'انضم إلى لعبة أولاً — دردشة الطاولة هنا.',
+  },
+  tauntBluff: { en: "You're bluffing!", ar: 'أنت تخادع!' },
+  tauntComeAtMe: { en: 'Come at me', ar: 'تحداني إن جرؤت' },
+  tauntNice: { en: 'Nice move', ar: 'حركة ذكية' },
+  tauntScared: { en: 'Scared?', ar: 'خفت؟' },
+
+  // Avatar
+  avatarLabel: { en: 'Your avatar', ar: 'صورتك الرمزية' },
 
   // Deck tracker
   deckTrackerTitle: { en: 'The 15 court cards', ar: 'بطاقات المحكمة الـ15' },
@@ -226,6 +246,8 @@ export const dict = {
   hapticsDesc: { en: 'Tactile feedback on taps', ar: 'ردة فعل لمسية عند الضغط' },
   soundsSetting: { en: 'Sound effects', ar: 'المؤثرات الصوتية' },
   soundsDesc: { en: 'Cards, coins and table sounds', ar: 'أصوات البطاقات والعملات والطاولة' },
+  musicSetting: { en: 'Table music', ar: 'موسيقى الطاولة' },
+  musicDesc: { en: 'Quiet inn tune while in a game', ar: 'لحن هادئ أثناء اللعب' },
   about: { en: 'About', ar: 'حول' },
   aboutText: {
     en: 'A fan-made digital adaptation of the card game Coup for playing with friends — each on their own device.',

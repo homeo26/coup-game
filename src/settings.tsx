@@ -11,13 +11,20 @@ export interface Settings {
   lang: Lang;
   haptics: boolean;
   sounds: boolean;
+  music: boolean;
+  /** Character portrait used as the player's avatar. */
+  avatar: string;
   playerName: string;
 }
+
+const ROLES = ['duke', 'assassin', 'captain', 'ambassador', 'contessa'];
 
 const DEFAULTS: Settings = {
   lang: getLang(),
   haptics: true,
   sounds: true,
+  music: true,
+  avatar: ROLES[Math.floor(Math.random() * ROLES.length)],
   playerName: '',
 };
 

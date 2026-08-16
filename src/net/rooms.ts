@@ -35,13 +35,30 @@ import { GameState, Move } from '../engine/types';
 export interface RoomPlayer {
   id: string;
   name: string;
+  /** Character portrait used as this player's avatar. */
+  avatar?: string;
 }
+
+export interface ChatMsg {
+  /** Sender id + name + avatar (denormalized so history survives leaves). */
+  u: string;
+  n: string;
+  a?: string;
+  /** 'text' = typed message, 'emote' = floating emoji, 'taunt' = canned line. */
+  k: 'text' | 'emote' | 'taunt';
+  v: string;
+  ts: number;
+}
+
+/** Chat history kept on the doc — capped so the doc stays small. */
+export const CHAT_CAP = 40;
 
 export interface Room {
   code: string;
   hostId: string;
   status: 'lobby' | 'playing';
   roster: RoomPlayer[];
+  chat: ChatMsg[];
   game: GameState | null;
 }
 
@@ -84,6 +101,7 @@ function parseRoom(code: string, data: Record<string, unknown>): Room {
     hostId: data.hostId as string,
     status: data.status as Room['status'],
     roster: (data.roster as RoomPlayer[]) ?? [],
+    chat: (data.chat as ChatMsg[]) ?? [],
     game: data.gameJson ? (JSON.parse(data.gameJson as string) as GameState) : null,
   };
 }
@@ -95,7 +113,7 @@ function randomCode(): string {
 }
 
 /** Create a room and become its host. Returns the room code. */
-export async function createRoom(name: string): Promise<string> {
+export async function createRoom(name: string, avatar?: string): Promise<string> {
   const id = await getInstallId();
   sweepStaleRooms(); // opportunistic GC, fire and forget
   for (let attempt = 0; attempt < 8; attempt++) {
@@ -110,7 +128,8 @@ export async function createRoom(name: string): Promise<string> {
     await setDoc(ref, {
       hostId: id,
       status: 'lobby',
-      roster: [{ id, name }],
+      roster: [{ id, name, ...(avatar ? { avatar } : {}) }],
+      chat: [],
       gameJson: null,
       createdAt: serverTimestamp(),
       createdAtMs: Date.now(),
@@ -123,7 +142,7 @@ export async function createRoom(name: string): Promise<string> {
 }
 
 /** Join an existing lobby by code. Throws i18n-key errors. */
-export async function joinRoom(code: string, name: string): Promise<void> {
+export async function joinRoom(code: string, name: string, avatar?: string): Promise<void> {
   const id = await getInstallId();
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(roomRef(code));
@@ -140,14 +159,16 @@ export async function joinRoom(code: string, name: string): Promise<void> {
       throw new Error('roomStarted');
     }
     if (already) {
-      // update name if changed
-      const roster = room.roster.map((p) => (p.id === id ? { ...p, name } : p));
+      // update name/avatar if changed
+      const roster = room.roster.map((p) =>
+        p.id === id ? { ...p, name, ...(avatar ? { avatar } : {}) } : p,
+      );
       tx.update(roomRef(code), { roster, updatedAt: serverTimestamp() });
       return;
     }
     if (room.roster.length >= MAX_PLAYERS) throw new Error('roomFull');
     tx.update(roomRef(code), {
-      roster: [...room.roster, { id, name }],
+      roster: [...room.roster, { id, name, ...(avatar ? { avatar } : {}) }],
       updatedAt: serverTimestamp(),
     });
   });
@@ -270,6 +291,24 @@ export async function playAgain(code: string): Promise<void> {
     tx.update(roomRef(code), {
       gameJson: JSON.stringify(game),
       left: [],
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+/** Append a chat message / emote / taunt; history capped at CHAT_CAP. */
+export async function sendChat(
+  code: string,
+  msg: Omit<ChatMsg, 'u' | 'ts'>,
+): Promise<void> {
+  const id = await getInstallId();
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef(code));
+    if (!snap.exists()) return;
+    const chat: ChatMsg[] = [...((snap.data()?.chat as ChatMsg[]) ?? [])];
+    chat.push({ ...msg, u: id, ts: Date.now() });
+    tx.update(roomRef(code), {
+      chat: chat.slice(-CHAT_CAP),
       updatedAt: serverTimestamp(),
     });
   });

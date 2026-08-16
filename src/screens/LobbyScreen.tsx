@@ -9,9 +9,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { Theme, font, latinFont, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
+import { RolePortrait } from '../components/RolePortrait';
 import { Breathing } from '../components/Breathing';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useRoom } from '../net/RoomContext';
+import { Role } from '../engine/types';
 import { useSettings } from '../settings';
 import { t, isRTL } from '../i18n';
 import { MIN_PLAYERS } from '../engine/engine';
@@ -92,9 +94,13 @@ export function LobbyScreen() {
             layout={LinearTransition.duration(200)}
             style={[styles.playerRow, rtl && styles.rowReverse]}
           >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{p.name.slice(0, 1).toUpperCase()}</Text>
-            </View>
+            {p.avatar ? (
+              <RolePortrait role={p.avatar as Role} size={36} ring={2} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{p.name.slice(0, 1).toUpperCase()}</Text>
+              </View>
+            )}
             <Text style={[styles.playerName, rtl && styles.rtlText]} numberOfLines={1}>
               {p.name}
             </Text>

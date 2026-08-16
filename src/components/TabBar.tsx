@@ -11,11 +11,13 @@ import { Theme, font, useStyles, useTheme } from '../theme';
 import { Pressy } from './Pressy';
 import { t } from '../i18n';
 
-export type TabName = 'play' | 'rules' | 'settings';
-export const TAB_ORDER: TabName[] = ['play', 'rules', 'settings'];
+export type TabName = 'play' | 'chat' | 'rules' | 'settings';
+/** Page order inside the pager — fixed; the chat BUTTON hides when idle. */
+export const TAB_ORDER: TabName[] = ['play', 'chat', 'rules', 'settings'];
 
 const ICONS: Record<TabName, keyof typeof Ionicons.glyphMap> = {
   play: 'game-controller',
+  chat: 'chatbubbles',
   rules: 'book',
   settings: 'ellipsis-horizontal-circle',
 };
@@ -23,14 +25,19 @@ const ICONS: Record<TabName, keyof typeof Ionicons.glyphMap> = {
 interface Props {
   activeIndex: number;
   onPress: (index: number) => void;
+  /** Chat tab is only offered while in a room. */
+  showChat: boolean;
+  /** Unread chat messages since the tab was last open. */
+  chatBadge: number;
 }
 
-export function TabBar({ activeIndex, onPress }: Props) {
+export function TabBar({ activeIndex, onPress, showChat, chatBadge }: Props) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const labels: Record<TabName, string> = {
     play: t('tabPlay'),
+    chat: t('tabChat'),
     rules: t('tabRules'),
     settings: t('tabSettings'),
   };
@@ -38,6 +45,7 @@ export function TabBar({ activeIndex, onPress }: Props) {
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
       {TAB_ORDER.map((tab, index) => {
+        if (tab === 'chat' && !showChat) return null;
         const focused = activeIndex === index;
         return (
           <Pressy
@@ -57,6 +65,11 @@ export function TabBar({ activeIndex, onPress }: Props) {
                 size={22}
                 color={focused ? theme.colors.gold : theme.colors.tabInactive}
               />
+              {tab === 'chat' && chatBadge > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{chatBadge > 9 ? '9+' : chatBadge}</Text>
+                </View>
+              ) : null}
             </View>
             <Text
               numberOfLines={1}
@@ -106,5 +119,24 @@ const makeStyles = (theme: Theme) =>
       fontSize: 11,
       marginTop: 3,
       lineHeight: 15,
+    },
+    badge: {
+      position: 'absolute',
+      top: -4,
+      right: -6,
+      minWidth: 17,
+      height: 17,
+      borderRadius: 9,
+      backgroundColor: theme.colors.danger,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 3,
+      borderWidth: 1.5,
+      borderColor: theme.colors.tabBar,
+    },
+    badgeText: {
+      fontSize: 9.5,
+      fontFamily: font('bold'),
+      color: '#fff',
     },
   });
