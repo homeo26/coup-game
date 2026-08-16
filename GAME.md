@@ -95,9 +95,13 @@ card for the failed challenge and can still be hit by the assassination
   Digital: with only one card left the reveal is forced/automatic.
 - A player with both cards revealed is eliminated and skipped.
 - When one player remains, they win immediately.
+- The engine records the **elimination order** (`eliminated: string[]`,
+  first-out first). Final standings = winner, then the eliminated in
+  reverse order (the last player knocked out is 2nd). Exposed via
+  `standings(state)` and shown as a ranked list on the game-over screen.
 - Digital extra: **forfeit** (leaving mid-game) reveals all of the
-  leaver's cards; any pending window they owed a response to is
-  re-evaluated so the game never stalls.
+  leaver's cards and joins the elimination order; any pending window
+  they owed a response to is re-evaluated so the game never stalls.
 
 ## 7. The characters (visual identity)
 
@@ -176,17 +180,50 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   on launch. Leaving a lobby removes you from the roster (host leaving
   deletes the room); leaving a live game forfeits.
 - Room codes: 4 letters from `ABCDEFGHJKLMNPQRSTUVWXYZ` (no I/O).
+- **Garbage collection** (no server, so clients clean up):
+  - Leaving a playing room records the leaver in a `left[]` field; the
+    last participant to leave **deletes the doc**.
+  - Every room creation opportunistically sweeps up to 10 rooms older
+    than 24h (`createdAtMs` query) — abandoned docs don't accumulate.
+  - `playAgain` resets `left` for the fresh game.
+
+### Offline mode (vs bots)
+
+- `playLocal(name, botCount 1–5)` runs the same engine entirely
+  in-memory — no Firestore, works with no connection.
+- Bot policy (`src/ai.ts`, shared with the headless test bots): coup at
+  10+ (mandatory) and often at 7+, assassinate/steal/tax/exchange with
+  real claims, occasional bluffs, honest blocks (rare bluffed ones),
+  ~25% challenge instinct, random targets.
+- A driver effect lets one bot act per state change (short human-ish
+  delay); the local game is presented through the same `Room` shape so
+  the entire game UI is reused unchanged (room code shows `BOTS`).
 
 ## 10. UX contract
 
 - Three always-mounted tabs (Play / Rules / More) in a pager; the Play
   tab morphs Home → Lobby → Game table with the room status.
+- Opponents render as a **single-column scoreboard** (one compact row
+  per player: turn/response state icon, name, influence indicators,
+  coins) so every player is visible at a glance with no grid scanning —
+  even at 6 players with the action list open.
+- Influence indicators: face-down cards are anonymous mini card-backs;
+  a lost card shows the **character's portrait** with a red ✗ badge.
+- The header deck chip opens the **deck tracker**: all 15 court cards
+  as 5 roles × 3 pips — revealed (dead, ✗) vs still hidden — plus
+  Court-deck and hidden-in-hands counts (public information only).
 - The bottom context panel morphs by phase: action chips on your turn
   (with target-selection mode for coup/steal/assassinate), Challenge /
   Allow prompts, Block-with-X buttons, card-loss picker, exchange
-  keeper, waiting states, win overlay (host gets Play-again).
-- Every interactive element uses press feedback (scale+fade); reveals,
-  panel changes and turn glow are short, subtle animations.
+  keeper, waiting states, and a game-over overlay with **ranked
+  standings** (1st = winner, then reverse elimination order; host gets
+  Play-again).
+- Motion: every interactive element uses press feedback (scale+fade);
+  every new game event floats an animated **banner in the free table
+  space** (never covering player rows) and re-animates the log strip;
+  coin counts pulse on change; the turn glow **fades between seats**
+  (border tint + halo ease in/out, small scale nudge on the new turn
+  holder); panels cross-fade per turn/phase.
 - Full Arabic + English; layout direction is applied manually per
   component (native direction stays LTR).
 - 10+ coins: UI disables everything except Coup and says why.

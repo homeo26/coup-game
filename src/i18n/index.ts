@@ -30,6 +30,12 @@ export const dict = {
   roomStarted: { en: 'This game has already started', ar: 'هذه اللعبة بدأت بالفعل' },
   offline: { en: 'No connection — check your internet and try again', ar: 'لا يوجد اتصال — تحقق من الإنترنت وحاول مجدداً' },
 
+  // Offline vs bots
+  offlineMode: { en: 'Play offline', ar: 'اللعب دون اتصال' },
+  botCount: { en: 'Opponents', ar: 'عدد الخصوم' },
+  playVsBots: { en: 'Play vs bots', ar: 'العب ضد الروبوتات' },
+  botName: { en: 'Bot {n}', ar: 'روبوت {n}' },
+
   // Lobby
   lobby: { en: 'Lobby', ar: 'صالة الانتظار' },
   shareCode: { en: 'Share this code with your friends', ar: 'شارك هذا الرمز مع أصدقائك' },
@@ -106,6 +112,17 @@ export const dict = {
   ok: { en: 'OK', ar: 'حسناً' },
   cancel: { en: 'Cancel', ar: 'إلغاء' },
 
+  // Deck tracker
+  deckTrackerTitle: { en: 'The 15 court cards', ar: 'بطاقات المحكمة الـ15' },
+  deckTrackerSummary: {
+    en: '{court} in the Court deck · {hands} hidden in hands',
+    ar: '{court} في كومة المحكمة · {hands} مخفية بأيدي اللاعبين',
+  },
+  deckTrackerHint: {
+    en: '✗ = revealed, out of play · ? = still hidden in a hand or the Court deck',
+    ar: '✗ = مكشوفة وخارج اللعب · ? = ما زالت مخفية في يدٍ ما أو في كومة المحكمة',
+  },
+
   // Log lines
   logIncome: { en: '{a} took Income (+1)', ar: '{a} أخذ دخلاً (+1)' },
   logForeignAid: { en: '{a} took Foreign Aid (+2)', ar: '{a} أخذ معونة خارجية (+2)' },
@@ -133,7 +150,19 @@ export const dict = {
 
   // Rules screen
   rulesTitle: { en: 'How to play', ar: 'طريقة اللعب' },
+  rulesSetup: { en: 'Setup', ar: 'التحضير' },
+  rulesSetupText: {
+    en: 'The Court deck holds 15 cards — 3 copies of each of the 5 characters. Every player starts with 2 face-down cards (their influence, kept secret) and 2 coins. The rest of the deck stays in the middle as the Court.',
+    ar: 'تحوي كومة المحكمة 15 بطاقة — 3 نسخ من كل شخصية من الشخصيات الخمس. يبدأ كل لاعب ببطاقتين مقلوبتين (نفوذه، ويبقيهما سراً) وعملتين. يبقى باقي البطاقات في الوسط ككومة المحكمة.',
+  },
+  rulesActions: { en: 'All actions', ar: 'جميع الإجراءات' },
+  claimsRole: { en: 'Claims the {role}', ar: 'يدّعي {role}' },
+  blockedBy: { en: 'Blocked by: {roles}', ar: 'يصدّه: {roles}' },
+  noBlock: { en: 'Cannot be blocked', ar: 'لا يُصد' },
+  challengeableYes: { en: 'Can be challenged', ar: 'يمكن تحدّيه' },
+  challengeableNo: { en: 'Cannot be challenged', ar: 'لا يُتحدى' },
   rolesTitle: { en: 'The characters', ar: 'الشخصيات' },
+  rolesCopies: { en: '3 copies of each character are in play.', ar: 'في اللعبة 3 نسخ من كل شخصية.' },
   dukeBlurb: {
     en: 'Tax: take 3 coins. Blocks Foreign Aid.',
     ar: 'الضريبة: خذ 3 عملات. يصدّ المعونة الخارجية.',
@@ -178,6 +207,16 @@ export const dict = {
   rulesTenText: {
     en: 'If you start your turn with 10 or more coins, you must launch a Coup.',
     ar: 'إذا بدأت دورك بعشر عملات أو أكثر، يجب أن تنفذ انقلاباً.',
+  },
+  rulesInfluence: { en: 'Influence & elimination', ar: 'النفوذ والإقصاء' },
+  rulesInfluenceText: {
+    en: 'Each face-down card is one influence. Whenever you lose influence, you choose one of your cards and turn it face-up — it is dead and public for the rest of the game. Lose both cards and you are out; the game then continues until one player remains, and the final standings rank everyone by how long they survived.',
+    ar: 'كل بطاقة مقلوبة هي نفوذ واحد. عندما تخسر نفوذاً، تختار إحدى بطاقاتك وتكشفها — تصبح ميتة ومعروفة للجميع لبقية اللعبة. اخسر البطاقتين وتخرج من اللعبة؛ ثم تستمر اللعبة حتى يبقى لاعب واحد، ويُرتَّب الجميع في النتيجة النهائية حسب صمودهم.',
+  },
+  rulesTurn: { en: 'On your turn', ar: 'في دورك' },
+  rulesTurnText: {
+    en: 'Pick exactly one action. Character actions (Tax, Assassinate, Steal, Exchange) are claims — you may claim a character you do not hold, but any player may challenge you. After the claim stands, targeted actions give the target (and Foreign Aid gives everyone) a chance to block.',
+    ar: 'اختر إجراءً واحداً بالضبط. إجراءات الشخصيات (الضريبة، الاغتيال، السرقة، التبادل) ادعاءات — يمكنك ادعاء شخصية لا تملكها، لكن يحق لأي لاعب أن يتحداك. إذا صمد الادعاء، يحصل الهدف (وفي المعونة الخارجية أي لاعب) على فرصة للصدّ.',
   },
 
   // Settings

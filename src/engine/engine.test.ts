@@ -10,6 +10,7 @@ import {
   isAlive,
   newGame,
   pendingResponders,
+  standings,
 } from './engine';
 import { GameState, Move, Role } from './types';
 
@@ -450,6 +451,58 @@ test('full 4-player smoke game runs to completion with random-ish play', () => {
   }
   assert(s.phase === 'game_over' && guard < 2000, 'smoke game finished');
   assert(!!s.winner, 'has a winner');
+});
+
+/* ------------------------------------------------------------------ */
+
+test('elimination order → standings ranks winner, then last-out first', () => {
+  let s = rig(
+    {
+      a: ['duke', 'duke'],
+      b: ['captain', 'captain'],
+      c: ['contessa', 'contessa'],
+    },
+    ['ambassador'],
+    { a: 30, b: 20, c: 0 },
+  );
+  // a coups c twice (c out first), then b coups a once, a coups b twice (b out second)
+  s = mv(s, 'a', { type: 'declare', action: 'coup', target: 'c' });
+  s = mv(s, 'c', { type: 'lose', cardIndex: 0 });
+  s = mv(s, 'b', { type: 'declare', action: 'coup', target: 'c' }); // auto-reveals last card
+  eq(s.eliminated, ['c'], 'c eliminated first');
+  s = mv(s, 'a', { type: 'declare', action: 'coup', target: 'b' });
+  s = mv(s, 'b', { type: 'lose', cardIndex: 0 });
+  s = mv(s, 'b', { type: 'declare', action: 'coup', target: 'a' });
+  s = mv(s, 'a', { type: 'lose', cardIndex: 0 });
+  s = mv(s, 'a', { type: 'declare', action: 'coup', target: 'b' }); // b's last card
+  eq(s.phase, 'game_over', 'game over');
+  eq(s.eliminated, ['c', 'b'], 'elimination order c then b');
+  eq(
+    standings(s).map((p) => p.id),
+    ['a', 'b', 'c'],
+    'standings: winner a, runner-up b, third c',
+  );
+});
+
+test('forfeit joins the elimination order', () => {
+  let s = rig(
+    {
+      a: ['duke', 'duke'],
+      b: ['captain', 'captain'],
+      c: ['contessa', 'contessa'],
+    },
+    ['ambassador'],
+  );
+  s = mv(s, 'b', { type: 'forfeit' });
+  eq(s.eliminated, ['b'], 'quitter recorded');
+  eq(s.phase, 'action', 'game continues with 2 players');
+});
+
+test('pre-standings saves migrate (eliminated defaults to [])', () => {
+  let s = rig({ a: ['duke', 'duke'], b: ['captain', 'captain'] }, ['ambassador']);
+  delete (s as Partial<GameState>).eliminated; // simulate an old saved game
+  s = mv(s, 'a', { type: 'declare', action: 'income' });
+  eq(s.eliminated, [], 'field restored');
 });
 
 /* ------------------------------------------------------------------ */

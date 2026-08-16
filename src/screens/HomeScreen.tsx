@@ -32,9 +32,10 @@ export function HomeScreen() {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
   const { lang, playerName, set, hydrated } = useSettings();
-  const { create, join, busy } = useRoom();
+  const { create, join, playLocal, busy } = useRoom();
   const [name, setName] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState('');
+  const [botCount, setBotCount] = useState(2);
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   const [working, setWorking] = useState<'create' | 'join' | null>(null);
   void lang; // re-render on language change
@@ -94,6 +95,17 @@ export function HomeScreen() {
     } finally {
       setWorking(null);
     }
+  };
+
+  const onPlayBots = () => {
+    Keyboard.dismiss();
+    if (!effectiveName) {
+      setNotice({ icon: 'person-outline', title: t('yourName'), body: t('nameNeeded') });
+      return;
+    }
+    remember();
+    haptics.medium();
+    playLocal(effectiveName, botCount);
   };
 
   const rtl = isRTL();
@@ -181,6 +193,39 @@ export function HomeScreen() {
                 <Text style={styles.joinBtnText}>{working === 'join' ? '…' : t('join')}</Text>
               </Pressy>
             </View>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.duration(400).delay(240)} style={styles.card}>
+            <Text style={[styles.label, rtl && styles.rtlText]}>{t('offlineMode')}</Text>
+            <View style={[styles.botRow, rtl && styles.rowReverse]}>
+              <Text style={[styles.botLabel, rtl && styles.rtlText]}>{t('botCount')}</Text>
+              <View style={[styles.botChips, rtl && styles.rowReverse]}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Pressy
+                    key={n}
+                    scaleTo={0.9}
+                    style={[styles.botChip, botCount === n && styles.botChipSel]}
+                    onPress={() => {
+                      haptics.selection();
+                      setBotCount(n);
+                    }}
+                  >
+                    <Text style={[styles.botChipText, botCount === n && styles.botChipTextSel]}>
+                      {n}
+                    </Text>
+                  </Pressy>
+                ))}
+              </View>
+            </View>
+            <Pressy
+              scaleTo={0.96}
+              style={[styles.botsBtn, (busy || working !== null) && styles.btnDisabled]}
+              onPress={onPlayBots}
+              disabled={busy || working !== null}
+            >
+              <Ionicons name="hardware-chip-outline" size={20} color={theme.colors.ink} />
+              <Text style={styles.botsBtnText}>{t('playVsBots')}</Text>
+            </Pressy>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -304,5 +349,58 @@ const makeStyles = (theme: Theme) =>
       fontSize: 15,
       fontFamily: font('bold'),
       color: theme.colors.goldLight,
+    },
+    botRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    botLabel: {
+      fontSize: 13,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
+    },
+    botChips: {
+      flexDirection: 'row',
+      gap: 6,
+    },
+    botChip: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      borderWidth: 1.5,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surfaceElevated,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    botChipSel: {
+      borderColor: theme.colors.gold,
+      backgroundColor: theme.colors.surfaceHover,
+    },
+    botChipText: {
+      fontSize: 15,
+      fontFamily: latinFont('bold'),
+      color: theme.colors.inkSoft,
+    },
+    botChipTextSel: {
+      color: theme.colors.goldLight,
+    },
+    botsBtn: {
+      height: 50,
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.surfaceHover,
+      borderWidth: 1.5,
+      borderColor: theme.colors.borderBright,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 8,
+    },
+    botsBtnText: {
+      fontSize: 15,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
     },
   });

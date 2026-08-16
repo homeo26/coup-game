@@ -31,6 +31,14 @@ the resulting state in a transaction (optimistic concurrency — stale
 moves validate against the fresh state and no-op). Hidden cards are
 hidden by the UI, not the wire — fine for friendly games.
 
+Storage is self-cleaning: the last player to leave a game deletes the
+room doc, and every room creation sweeps rooms older than 24 hours —
+no server-side garbage collector needed.
+
+**Offline mode**: play against 1–5 bots with no connection at all — the
+same engine runs in-memory and a shared bot policy (`src/ai.ts`) plays
+every action, block, challenge and bluff.
+
 ## The rules engine
 
 **Full game specification lives in [GAME.md](GAME.md)** — rules,

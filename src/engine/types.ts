@@ -98,6 +98,8 @@ export interface GameState {
   pending: PendingAction | null;
   lossQueue: PendingLoss[];
   winner: string | null;
+  /** Player ids in the order they were eliminated (first out first). */
+  eliminated: string[];
   log: LogEntry[];
   /** Monotonic move counter (optimistic concurrency). */
   version: number;

@@ -15,10 +15,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   FadeIn,
   FadeInDown,
+  FadeOut,
   LinearTransition,
+  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { Theme, font, latinFont, roleColors, useStyles, useTheme } from '../theme';
@@ -31,7 +34,7 @@ import { Breathing } from '../components/Breathing';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useRoom } from '../net/RoomContext';
 import { useSettings } from '../settings';
-import { influence, isAlive, pendingResponders } from '../engine/engine';
+import { influence, isAlive, pendingResponders, standings } from '../engine/engine';
 import {
   ACTION_ROLE,
   ActionType,
@@ -40,6 +43,7 @@ import {
   LogEntry,
   PlayerState,
   Role,
+  ROLES,
 } from '../engine/types';
 import { t, TKey, isRTL } from '../i18n';
 import * as haptics from '../haptics';
@@ -116,13 +120,18 @@ function logMeta(e: LogEntry, th: Theme): { icon: keyof typeof Ionicons.glyphMap
 /* Opponent seat                                                       */
 /* ------------------------------------------------------------------ */
 
-/** Soft pulsing gold halo behind the active player's seat. */
-function TurnGlow() {
+/** Soft pulsing gold halo behind the active player's seat. Always
+ *  mounted; presence fades in/out so the turn glides between seats. */
+function TurnGlow({ active }: { active: boolean }) {
   const pulse = useSharedValue(0.35);
+  const presence = useSharedValue(active ? 1 : 0);
   useEffect(() => {
     pulse.value = withRepeat(withTiming(1, { duration: 1100 }), -1, true);
   }, [pulse]);
-  const anim = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  useEffect(() => {
+    presence.value = withTiming(active ? 1 : 0, { duration: 550 });
+  }, [active, presence]);
+  const anim = useAnimatedStyle(() => ({ opacity: presence.value * pulse.value }));
   return (
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, glowStyles.ring, anim]} />
   );
@@ -130,72 +139,222 @@ function TurnGlow() {
 
 const glowStyles = StyleSheet.create({
   ring: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: '#d4a854',
   },
 });
 
-function Seat({
+/** Tiny influence indicator: face-down back, or the lost character's
+ *  portrait with a strike — so who lost what reads at a glance. */
+function MiniCard({ role, revealed }: { role: Role; revealed: boolean }) {
+  const theme = useTheme();
+  const styles = useStyles(makeStyles);
+  if (!revealed) {
+    return (
+      <View style={styles.miniCard}>
+        <View style={styles.miniCardDot} />
+      </View>
+    );
+  }
+  return (
+    <Animated.View entering={FadeIn.duration(400)} style={styles.miniDeadWrap}>
+      <RolePortrait role={role} size={30} ring={1.5} />
+      <View style={styles.miniDeadX}>
+        <Ionicons name="close" size={10} color={theme.colors.danger} />
+      </View>
+    </Animated.View>
+  );
+}
+
+/** Coin count that pulses whenever the amount changes. */
+function AnimatedCoins({ amount, size }: { amount: number; size: number }) {
+  const scale = useSharedValue(1);
+  const prev = useRef(amount);
+  useEffect(() => {
+    if (prev.current !== amount) {
+      prev.current = amount;
+      scale.value = withSequence(
+        withTiming(1.35, { duration: 170 }),
+        withTiming(1, { duration: 260 }),
+      );
+    }
+  }, [amount, scale]);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Animated.View style={st}>
+      <CoinCount amount={amount} size={size} />
+    </Animated.View>
+  );
+}
+
+/**
+ * One opponent = one full-width scoreboard row: turn state on the left,
+ * name, influence cards, coins on the right. All opponents fit in a
+ * single glance-friendly column — no grid to scan.
+ */
+function SeatRow({
   p,
   isTurn,
   responding,
   targetable,
   onTarget,
-  width,
 }: {
   p: PlayerState;
   isTurn: boolean;
   responding: boolean;
   targetable: boolean;
   onTarget: () => void;
-  width: number;
 }) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
+  const rtl = isRTL();
   const dead = !isAlive(p);
+
+  // A gentle scale nudge when the turn arrives at this seat
+  const nudge = useSharedValue(1);
+  const wasTurn = useRef(isTurn);
+  useEffect(() => {
+    if (isTurn && !wasTurn.current) {
+      nudge.value = withSequence(
+        withTiming(1.03, { duration: 220 }),
+        withTiming(1, { duration: 320 }),
+      );
+    }
+    wasTurn.current = isTurn;
+  }, [isTurn, nudge]);
+  const nudgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: nudge.value }] }));
+
+  // Smooth turn hand-off: border tint eases in/out with the glow
+  const turnSv = useSharedValue(isTurn ? 1 : 0);
+  useEffect(() => {
+    turnSv.value = withTiming(isTurn ? 1 : 0, { duration: 550 });
+  }, [isTurn, turnSv]);
+  const baseBorder = theme.colors.border;
+  const goldBorder = theme.colors.gold;
+  const borderStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(turnSv.value, [0, 1], [baseBorder, goldBorder]),
+  }));
+
   return (
-    <Pressy
-      scaleTo={0.95}
-      disabled={!targetable}
-      onPress={onTarget}
-      style={[
-        styles.seat,
-        { width },
-        isTurn && styles.seatTurn,
-        targetable && styles.seatTargetable,
-        dead && styles.seatDead,
-      ]}
-    >
-      {isTurn ? <TurnGlow /> : null}
-      <View style={styles.seatHead}>
-        <Text style={styles.seatName} numberOfLines={1}>
+    <Animated.View style={nudgeStyle} layout={LinearTransition.duration(250)}>
+      <Animated.View
+        style={[
+          styles.seatShell,
+          !targetable && !dead && borderStyle,
+          targetable && { borderColor: theme.colors.danger },
+          dead && { borderColor: theme.colors.border },
+        ]}
+      >
+        <Pressy
+          scaleTo={0.97}
+          disabled={!targetable}
+          onPress={onTarget}
+          style={[styles.seatRow, rtl && styles.rowReverse, dead && styles.seatRowDead]}
+        >
+          <TurnGlow active={isTurn} />
+        <View style={styles.seatState}>
+          {targetable ? (
+            <Ionicons name="locate" size={17} color={theme.colors.danger} />
+          ) : dead ? (
+            <Ionicons name="skull-outline" size={15} color={theme.colors.inkFaint} />
+          ) : responding ? (
+            <Ionicons name="hourglass-outline" size={15} color={theme.colors.warning} />
+          ) : isTurn ? (
+            <Ionicons name="play" size={14} color={theme.colors.gold} />
+          ) : (
+            <View style={styles.seatIdleDot} />
+          )}
+        </View>
+        <Text
+          style={[styles.seatRowName, rtl && styles.rtlText, dead && styles.seatRowNameDead]}
+          numberOfLines={1}
+        >
           {p.name}
         </Text>
-        {responding ? (
-          <Ionicons name="hourglass-outline" size={13} color={theme.colors.warning} />
-        ) : null}
-      </View>
-      <View style={styles.seatCards}>
-        {p.cards.map((c, i) =>
-          c.revealed ? (
-            <InfluenceCard key={i} role={c.role} dead width={34} />
-          ) : (
-            <InfluenceCard key={i} width={34} />
-          ),
-        )}
-      </View>
-      {dead ? (
-        <Text style={styles.deadLabel}>{t('eliminated')}</Text>
-      ) : (
-        <CoinCount amount={p.coins} size={15} />
-      )}
-      {targetable ? (
-        <View style={styles.targetRing}>
-          <Ionicons name="locate" size={15} color={theme.colors.danger} />
+        <View style={[styles.seatRowCards, rtl && styles.rowReverse]}>
+          {p.cards.map((c, i) => (
+            <MiniCard key={i} role={c.role} revealed={c.revealed} />
+          ))}
         </View>
-      ) : null}
-    </Pressy>
+        <View style={[styles.seatRowCoins, rtl && styles.rowReverse]}>
+          {dead ? (
+            <Text style={styles.deadLabel}>{t('eliminated')}</Text>
+          ) : (
+            <AnimatedCoins amount={p.coins} size={16} />
+          )}
+        </View>
+        </Pressy>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Deck tracker — all 15 cards at a glance                             */
+/* ------------------------------------------------------------------ */
+
+function DeckTracker({ g, onClose }: { g: GameState; onClose: () => void }) {
+  const theme = useTheme();
+  const styles = useStyles(makeStyles);
+  const rtl = isRTL();
+  // Public knowledge: cards revealed (lost) by any player are dead.
+  const deadByRole = new Map<Role, number>();
+  for (const p of g.players) {
+    for (const c of p.cards) {
+      if (c.revealed) deadByRole.set(c.role, (deadByRole.get(c.role) ?? 0) + 1);
+    }
+  }
+  const hiddenInHands = g.players.reduce(
+    (n, p) => n + p.cards.filter((c) => !c.revealed).length,
+    0,
+  );
+  return (
+    <View style={styles.logModalBackdrop}>
+      <View style={styles.logModal}>
+        <Text style={styles.panelTitle}>{t('deckTrackerTitle')}</Text>
+        <Text style={[styles.deckSummary, rtl && styles.rtlText]}>
+          {t('deckTrackerSummary', { court: g.deck.length, hands: hiddenInHands })}
+        </Text>
+        {ROLES.map((r) => {
+          const dead = deadByRole.get(r) ?? 0;
+          return (
+            <View key={r} style={[styles.trackerRow, rtl && styles.rowReverse]}>
+              <RolePortrait role={r} size={36} ring={1.5} />
+              <Text style={[styles.trackerName, rtl && styles.rtlText, { color: roleColors[r] }]}>
+                {t(r as TKey)}
+              </Text>
+              <View style={[styles.trackerPips, rtl && styles.rowReverse]}>
+                {[0, 1, 2].map((i) => {
+                  const isDead = i < dead;
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.trackerPip,
+                        isDead
+                          ? { borderColor: theme.colors.danger + '77', backgroundColor: theme.colors.danger + '1c' }
+                          : { borderColor: theme.colors.borderBright },
+                      ]}
+                    >
+                      {isDead ? (
+                        <Ionicons name="close" size={13} color={theme.colors.danger} />
+                      ) : (
+                        <Ionicons name="help" size={12} color={theme.colors.inkFaint} />
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+        <Text style={[styles.deckHint, rtl && styles.rtlText]}>{t('deckTrackerHint')}</Text>
+        <Pressy scaleTo={0.95} style={styles.neutralBtn} onPress={onClose}>
+          <Text style={styles.neutralBtnText}>{t('ok')}</Text>
+        </Pressy>
+      </View>
+    </View>
   );
 }
 
@@ -206,7 +365,7 @@ function Seat({
 export function GameScreen() {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
-  const { width, height: winH } = useWindowDimensions();
+  const { height: winH } = useWindowDimensions();
   const { lang } = useSettings();
   const { room, myId, move, leave, again } = useRoom();
   const [selAction, setSelAction] = useState<ActionType | null>(null);
@@ -215,6 +374,8 @@ export function GameScreen() {
   const [keepIdxs, setKeepIdxs] = useState<number[]>([]);
   const [sending, setSending] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [deckOpen, setDeckOpen] = useState(false);
+  const [banner, setBanner] = useState<{ entry: LogEntry; key: number } | null>(null);
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   void lang;
 
@@ -246,10 +407,23 @@ export function GameScreen() {
     setKeepIdxs([]);
   }, [g?.version]);
 
+  // Every new game event floats an animated banner over the table, so
+  // mid-game actions are impossible to miss.
+  const logLen = g?.log.length ?? 0;
+  const seenLen = useRef(logLen);
+  useEffect(() => {
+    const prev = seenLen.current;
+    seenLen.current = logLen;
+    if (logLen > prev && g) {
+      setBanner({ entry: g.log[logLen - 1], key: logLen });
+      const timer = setTimeout(() => setBanner((b) => (b?.key === logLen ? null : b)), 2100);
+      return () => clearTimeout(timer);
+    }
+  }, [logLen, g]);
+
   if (!g || !me) return null;
   const rtl = isRTL();
   const opponents = g.players.filter((p) => p.id !== me.id);
-  const seatW = Math.floor((width - 40 - 8 * 2) / Math.min(3, Math.max(2, opponents.length)));
 
   const dispatch = async (m: Parameters<typeof move>[0]) => {
     if (sending) return;
@@ -559,7 +733,11 @@ export function GameScreen() {
         ? t('turnOf', { name: current.name })
         : t('waitingOthers');
     panel = (
-      <Animated.View entering={FadeIn.duration(200)} style={styles.panel}>
+      <Animated.View
+        key={`wait-${current?.id ?? ''}-${g.phase}`}
+        entering={FadeIn.duration(320)}
+        style={styles.panel}
+      >
         <View style={[styles.waitRow, rtl && styles.rowReverse]}>
           <Ionicons name="hourglass-outline" size={15} color={theme.colors.inkSoft} />
           <Text style={styles.waitText}>{label}</Text>
@@ -595,55 +773,91 @@ export function GameScreen() {
           <Ionicons name="exit-outline" size={19} color={theme.colors.danger} />
         </Pressy>
         <Text style={styles.roomCode}>{room!.code}</Text>
-        <View style={[styles.deckChip, rtl && styles.rowReverse]}>
-          <Ionicons name="albums-outline" size={14} color={theme.colors.inkSoft} />
+        <Pressy
+          scaleTo={0.92}
+          style={[styles.deckChip, rtl && styles.rowReverse]}
+          onPress={() => {
+            haptics.selection();
+            setDeckOpen(true);
+          }}
+        >
+          <Ionicons name="albums-outline" size={14} color={theme.colors.goldLight} />
           <Text style={styles.deckText}>{g.deck.length}</Text>
-        </View>
+        </Pressy>
       </View>
 
-      {/* Log strip */}
+      {/* Log strip — animates on every new event */}
       <Pressy scaleTo={0.98} style={styles.logStrip} onPress={() => setLogOpen(true)}>
-        {latestLog ? (
-          <Ionicons
-            name={logMeta(latestLog, theme).icon}
-            size={15}
-            color={logMeta(latestLog, theme).color}
-          />
-        ) : (
-          <Ionicons name="chatbox-ellipses-outline" size={14} color={theme.colors.goldDark} />
-        )}
-        <Text style={[styles.logText, rtl && styles.rtlText]} numberOfLines={1}>
-          {latestLog ? formatLog(latestLog) : '—'}
-        </Text>
+        <Animated.View
+          key={logLen}
+          entering={FadeInDown.duration(280)}
+          style={[styles.logStripInner, rtl && styles.rowReverse]}
+        >
+          {latestLog ? (
+            <Ionicons
+              name={logMeta(latestLog, theme).icon}
+              size={15}
+              color={logMeta(latestLog, theme).color}
+            />
+          ) : (
+            <Ionicons name="chatbox-ellipses-outline" size={14} color={theme.colors.goldDark} />
+          )}
+          <Text style={[styles.logText, rtl && styles.rtlText]} numberOfLines={1}>
+            {latestLog ? formatLog(latestLog) : '—'}
+          </Text>
+        </Animated.View>
         <Ionicons name="chevron-up" size={13} color={theme.colors.inkFaint} />
       </Pressy>
 
-      {/* Opponents */}
-      <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={styles.seats} horizontal={false}>
-        <View style={styles.seatWrap}>
-          {opponents.map((p) => (
-            <Seat
-              key={p.id}
-              p={p}
-              width={seatW}
-              isTurn={current?.id === p.id && g.phase !== 'game_over'}
-              responding={responders.includes(p.id)}
-              targetable={targetable(p)}
-              onTarget={() => {
-                if (!targetable(p)) return;
-                haptics.selection();
-                setSelTarget(p.id);
-              }}
+      {/* Opponents — one compact scoreboard row each, always all visible */}
+      <View style={styles.seatColumn}>
+        {opponents.map((p) => (
+          <SeatRow
+            key={p.id}
+            p={p}
+            isTurn={current?.id === p.id && g.phase !== 'game_over'}
+            responding={responders.includes(p.id)}
+            targetable={targetable(p)}
+            onTarget={() => {
+              if (!targetable(p)) return;
+              haptics.selection();
+              setSelTarget(p.id);
+            }}
+          />
+        ))}
+      </View>
+
+      {/* The free table space between seats and my area hosts the
+          floating event banner — it can never cover a player row. */}
+      <View style={styles.tableSpace} pointerEvents="none">
+        {banner && g.phase !== 'game_over' ? (
+          <Animated.View
+            key={banner.key}
+            entering={FadeInDown.duration(300)}
+            exiting={FadeOut.duration(350)}
+            style={[
+              styles.bannerCard,
+              rtl && styles.rowReverse,
+              { borderColor: logMeta(banner.entry, theme).color + '77' },
+            ]}
+          >
+            <Ionicons
+              name={logMeta(banner.entry, theme).icon}
+              size={17}
+              color={logMeta(banner.entry, theme).color}
             />
-          ))}
-        </View>
-      </ScrollView>
+            <Text style={[styles.bannerText, rtl && styles.rtlText]} numberOfLines={2}>
+              {formatLog(banner.entry)}
+            </Text>
+          </Animated.View>
+        ) : null}
+      </View>
 
       {/* My area */}
       <View style={styles.myArea}>
         <View style={[styles.myHead, rtl && styles.rowReverse]}>
           <Text style={styles.myName}>{me.name}</Text>
-          <CoinCount amount={me.coins} size={20} />
+          <AnimatedCoins amount={me.coins} size={20} />
         </View>
         <View style={styles.hand}>
           {me.cards.map((c, i) => (
@@ -669,14 +883,57 @@ export function GameScreen() {
         <View>{panel}</View>
       </View>
 
-      {/* Win overlay */}
+      {/* Game over — final standings */}
       {g.phase === 'game_over' && winner ? (
         <Animated.View entering={FadeIn.duration(350)} style={styles.winOverlay}>
           <Animated.View entering={FadeInDown.duration(400).delay(120)} style={styles.winCard}>
-            <Ionicons name="trophy" size={54} color={theme.colors.gold} />
+            <Ionicons name="trophy" size={44} color={theme.colors.gold} />
             <Text style={styles.winTitle}>
               {winner.id === me.id ? t('youWin') : t('winnerIs', { name: winner.name })}
             </Text>
+            <View style={styles.standings}>
+              {standings(g).map((p, i) => {
+                const medal =
+                  i === 0 ? '#e8c766' : i === 1 ? '#b8c0cc' : i === 2 ? '#c98a4b' : null;
+                return (
+                  <Animated.View
+                    key={p.id}
+                    entering={FadeInDown.duration(300).delay(200 + i * 90)}
+                    style={[
+                      styles.standingRow,
+                      rtl && styles.rowReverse,
+                      i === 0 && styles.standingWinner,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.rankBadge,
+                        medal ? { borderColor: medal, backgroundColor: medal + '22' } : null,
+                      ]}
+                    >
+                      {i === 0 ? (
+                        <Ionicons name="trophy" size={13} color={medal!} />
+                      ) : (
+                        <Text style={[styles.rankText, medal ? { color: medal } : null]}>
+                          {i + 1}
+                        </Text>
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.standingName,
+                        rtl && styles.rtlText,
+                        i === 0 && { color: theme.colors.goldLight },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {p.name}
+                      {p.id === me.id ? `  (${t('you')})` : ''}
+                    </Text>
+                  </Animated.View>
+                );
+              })}
+            </View>
             {room!.hostId === me.id ? (
               <Pressy scaleTo={0.95} style={styles.goldBtn} onPress={() => again()}>
                 <Text style={styles.goldBtnText}>{t('playAgain')}</Text>
@@ -688,6 +945,16 @@ export function GameScreen() {
           </Animated.View>
         </Animated.View>
       ) : null}
+
+      {/* Deck tracker — the 15 court cards at a glance */}
+      <Modal
+        visible={deckOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeckOpen(false)}
+      >
+        <DeckTracker g={g} onClose={() => setDeckOpen(false)} />
+      </Modal>
 
       {/* Full history — visual timeline, latest first */}
       <Modal visible={logOpen} transparent animationType="fade" onRequestClose={() => setLogOpen(false)}>
@@ -794,62 +1061,202 @@ const makeStyles = (theme: Theme) =>
       fontFamily: font('semibold'),
       color: theme.colors.inkSoft,
     },
-    seats: {
-      paddingHorizontal: 20,
-      paddingTop: 12,
-    },
-    seatWrap: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-      justifyContent: 'center',
-    },
-    seat: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.radius.md,
-      borderWidth: 1.5,
-      borderColor: theme.colors.border,
-      alignItems: 'center',
-      paddingVertical: 8,
-      paddingHorizontal: 6,
+    seatColumn: {
+      paddingHorizontal: 16,
+      paddingTop: 10,
       gap: 6,
     },
-    seatTurn: {
-      borderColor: theme.colors.gold,
-      ...theme.shadow.goldGlow,
+    seatShell: {
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: theme.colors.border,
     },
-    seatTargetable: {
-      borderColor: theme.colors.danger,
-    },
-    seatDead: {
-      opacity: 0.55,
-    },
-    seatHead: {
+    seatRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
-      maxWidth: '100%',
-      paddingHorizontal: 2,
+      gap: 10,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 12.5,
+      paddingHorizontal: 12,
+      height: 48,
     },
-    seatName: {
-      fontSize: 12.5,
+    seatRowDead: {
+      opacity: 0.8,
+    },
+    seatState: {
+      width: 20,
+      alignItems: 'center',
+    },
+    seatIdleDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: theme.colors.borderBright,
+    },
+    seatRowName: {
+      flex: 1,
+      fontSize: 14.5,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+    },
+    seatRowNameDead: {
+      textDecorationLine: 'line-through',
+      color: theme.colors.inkFaint,
+    },
+    seatRowCards: {
+      flexDirection: 'row',
+      gap: 4,
+    },
+    seatRowCoins: {
+      minWidth: 52,
+      alignItems: 'flex-end',
+    },
+    miniCard: {
+      width: 20,
+      height: 27,
+      borderRadius: 4,
+      borderWidth: 1.5,
+      borderColor: theme.colors.borderBright,
+      backgroundColor: theme.colors.surfaceElevated,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    miniCardDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: theme.colors.goldDark,
+    },
+    miniDeadWrap: {
+      width: 30,
+      height: 30,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    miniDeadX: {
+      position: 'absolute',
+      bottom: -3,
+      right: -4,
+      width: 15,
+      height: 15,
+      borderRadius: 8,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.colors.danger + '88',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    logStripInner: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    tableSpace: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    },
+    bannerCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: 'rgba(18, 20, 26, 0.94)',
+      borderWidth: 1.5,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      maxWidth: '100%',
+      ...theme.shadow.card,
+    },
+    bannerText: {
+      fontSize: 13.5,
       fontFamily: font('bold'),
       color: theme.colors.ink,
       flexShrink: 1,
-    },
-    seatCards: {
-      flexDirection: 'row',
-      gap: 4,
     },
     deadLabel: {
       fontSize: 10,
       fontFamily: font('bold'),
       color: theme.colors.danger,
     },
-    targetRing: {
-      position: 'absolute',
-      top: 6,
-      right: 6,
+    trackerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 7,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    trackerName: {
+      flex: 1,
+      fontSize: 14,
+      fontFamily: font('bold'),
+    },
+    trackerPips: {
+      flexDirection: 'row',
+      gap: 6,
+    },
+    trackerPip: {
+      width: 26,
+      height: 34,
+      borderRadius: 6,
+      borderWidth: 1.5,
+      backgroundColor: theme.colors.surfaceElevated,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    deckSummary: {
+      fontSize: 12,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
+      textAlign: 'center',
+      marginTop: -4,
+    },
+    deckHint: {
+      fontSize: 11,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkFaint,
+      textAlign: 'center',
+    },
+    standings: {
+      alignSelf: 'stretch',
+      gap: 6,
+    },
+    standingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderRadius: theme.radius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      paddingHorizontal: 12,
+      height: 42,
+    },
+    standingWinner: {
+      borderColor: theme.colors.gold,
+    },
+    rankBadge: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      borderWidth: 1.5,
+      borderColor: theme.colors.borderBright,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rankText: {
+      fontSize: 12,
+      fontFamily: latinFont('bold'),
+      color: theme.colors.inkSoft,
+    },
+    standingName: {
+      flex: 1,
+      fontSize: 14,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
     },
     myArea: {
       marginTop: 'auto',

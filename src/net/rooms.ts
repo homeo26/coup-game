@@ -14,14 +14,19 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  limit,
   onSnapshot,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { apply, newGame, MAX_PLAYERS } from '../engine/engine';
@@ -92,6 +97,7 @@ function randomCode(): string {
 /** Create a room and become its host. Returns the room code. */
 export async function createRoom(name: string): Promise<string> {
   const id = await getInstallId();
+  sweepStaleRooms(); // opportunistic GC, fire and forget
   for (let attempt = 0; attempt < 8; attempt++) {
     const code = randomCode();
     const ref = roomRef(code);
@@ -126,7 +132,11 @@ export async function joinRoom(code: string, name: string): Promise<void> {
     const already = room.roster.some((p) => p.id === id);
     if (room.status !== 'lobby') {
       // Rejoining a game you're part of is fine (reconnect)
-      if (already) return;
+      if (already) {
+        const left = ((snap.data()?.left as string[]) ?? []).filter((x) => x !== id);
+        tx.update(roomRef(code), { left, updatedAt: serverTimestamp() });
+        return;
+      }
       throw new Error('roomStarted');
     }
     if (already) {
@@ -186,7 +196,8 @@ export async function commitMove(code: string, move: Move): Promise<string | nul
 }
 
 /** Leave: in lobby, drop from roster (host leaving deletes the room);
- *  in game, forfeit. */
+ *  in game, forfeit. The last participant to walk away deletes the doc
+ *  — that is the garbage collector for finished/abandoned games. */
 export async function leaveRoom(code: string): Promise<void> {
   const id = await getInstallId();
   try {
@@ -205,18 +216,43 @@ export async function leaveRoom(code: string): Promise<void> {
         }
         return;
       }
+      const left: string[] = [...((snap.data()?.left as string[]) ?? [])];
+      if (!left.includes(id)) left.push(id);
+      if (room.roster.every((p) => left.includes(p.id))) {
+        // Everyone is gone — reclaim the storage.
+        tx.delete(roomRef(code));
+        return;
+      }
+      let gameJson: string | null = null;
       if (room.game && room.game.phase !== 'game_over') {
         const result = apply(room.game, id, { type: 'forfeit' });
-        if (!result.error) {
-          tx.update(roomRef(code), {
-            gameJson: JSON.stringify(result.state),
-            updatedAt: serverTimestamp(),
-          });
-        }
+        if (!result.error) gameJson = JSON.stringify(result.state);
       }
+      tx.update(roomRef(code), {
+        left,
+        ...(gameJson ? { gameJson } : {}),
+        updatedAt: serverTimestamp(),
+      });
     });
   } finally {
     await saveActiveRoom(null);
+  }
+}
+
+/**
+ * Best-effort sweep of rooms nobody bothered to leave: anything older
+ * than 24h is fair game. Runs on room creation; failures are ignored
+ * (another client may be sweeping the same doc).
+ */
+export async function sweepStaleRooms(): Promise<void> {
+  try {
+    const cutoff = Date.now() - 24 * 3600 * 1000;
+    const stale = await getDocs(
+      query(collection(db, 'coup_rooms'), where('createdAtMs', '<', cutoff), limit(10)),
+    );
+    await Promise.all(stale.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+  } catch {
+    // listing may be racing another sweep — never block room creation
   }
 }
 
@@ -233,6 +269,7 @@ export async function playAgain(code: string): Promise<void> {
     const game = newGame(room.roster);
     tx.update(roomRef(code), {
       gameJson: JSON.stringify(game),
+      left: [],
       updatedAt: serverTimestamp(),
     });
   });

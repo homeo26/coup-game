@@ -130,6 +130,7 @@ export function newGame(
     pending: null,
     lossQueue: [],
     winner: null,
+    eliminated: [],
     log: [],
     version: 0,
   };
@@ -142,6 +143,7 @@ export function newGame(
 export function apply(prev: GameState, playerId: string, move: Move): MoveResult {
   // Deep clone: the reducer mutates its working copy freely.
   const s: GameState = JSON.parse(JSON.stringify(prev));
+  s.eliminated = s.eliminated ?? []; // migrate pre-standings saves
   try {
     applyMove(s, playerId, move);
   } catch (e) {
@@ -489,9 +491,27 @@ function revealCard(s: GameState, p: PlayerState, cardIndex: number) {
   p.cards[cardIndex].revealed = true;
   log(s, 'logLostCard', { a: p.name, r: p.cards[cardIndex].role });
   if (!isAlive(p)) {
+    markEliminated(s, p);
     log(s, 'logEliminated', { a: p.name });
   }
   checkWin(s);
+}
+
+function markEliminated(s: GameState, p: PlayerState) {
+  if (!s.eliminated.includes(p.id)) s.eliminated.push(p.id);
+}
+
+/**
+ * Final ranking: everyone still alive first (the winner once the game is
+ * over), then the eliminated in reverse elimination order — the last
+ * player knocked out takes 2nd place.
+ */
+export function standings(s: GameState): PlayerState[] {
+  const elim = s.eliminated ?? [];
+  return [
+    ...s.players.filter(isAlive),
+    ...[...elim].reverse().map((id) => player(s, id)),
+  ];
 }
 
 function checkWin(s: GameState) {
@@ -583,6 +603,7 @@ function forfeit(s: GameState, playerId: string) {
   const me = player(s, playerId);
   if (!isAlive(me)) throw new Error('already out');
   me.cards.forEach((c) => (c.revealed = true));
+  markEliminated(s, me);
   log(s, 'logForfeit', { a: me.name });
   s.lossQueue = s.lossQueue.filter((l) => l.playerId !== playerId);
   checkWin(s);
