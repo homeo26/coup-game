@@ -33,8 +33,12 @@ hidden by the UI, not the wire — fine for friendly games.
 
 ## The rules engine
 
+**Full game specification lives in [GAME.md](GAME.md)** — rules,
+characters, state machine, edge-case semantics, and the multiplayer
+protocol, complete enough to reconstruct the game from scratch.
+
 `src/engine/` is a dependency-free TypeScript reducer implementing the
-complete 2013 rulebook:
+complete rule set:
 
 - Income / Foreign Aid / **Coup** (mandatory at 10+ coins, unstoppable)
 - **Duke** Tax · **Assassin** Assassinate · **Captain** Steal ·
