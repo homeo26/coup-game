@@ -3,7 +3,7 @@
     "name": "Coup",
     "slug": "coup-game",
     "scheme": "coupgame",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -24,7 +24,7 @@
         "CFBundleAllowMixedLocalizations": true,
         "ExpoLocalization_supportsRTL": true
       },
-      "buildNumber": "10000"
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.coupgame.app",
@@ -33,7 +33,7 @@
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "versionCode": 10000
+      "versionCode": 2
     },
     "plugins": [
       "expo-router",
