@@ -1,10 +1,20 @@
-# Coup — كو
+# Coup — كوب
 
 A React Native mobile adaptation of the bluffing card game **Coup** for
 playing with friends — each player installs the app on their own device
 and everyone joins the same room with a 4-letter code. 2–6 players.
 
 Arabic + English, dystopian dark & gold theme, vector character art.
+
+## Screenshots
+
+| Home | Lobby | Game table | Deck tracker |
+|:---:|:---:|:---:|:---:|
+| ![Home](docs/screenshots/home.png) | ![Lobby](docs/screenshots/lobby.png) | ![Game table](docs/screenshots/table.png) | ![Deck tracker](docs/screenshots/tracker.png) |
+
+| Game history | Final standings | العربية |
+|:---:|:---:|:---:|
+| ![History](docs/screenshots/history.png) | ![Standings](docs/screenshots/standings.png) | ![Arabic](docs/screenshots/arabic.png) |
 
 ## How multiplayer works
 
