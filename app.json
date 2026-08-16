@@ -23,8 +23,7 @@
       "infoPlist": {
         "CFBundleAllowMixedLocalizations": true,
         "ExpoLocalization_supportsRTL": true
-      },
-      "buildNumber": "2"
+      }
     },
     "android": {
       "package": "com.coupgame.app",
@@ -33,7 +32,7 @@
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "versionCode": 2
+      "versionCode": 10100
     },
     "plugins": [
       "expo-router",
