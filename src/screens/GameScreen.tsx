@@ -69,6 +69,49 @@ function formatLog(e: LogEntry): string {
   return t(e.key as TKey, params);
 }
 
+/** Icon + accent per event type, so the history reads at a glance. */
+function logMeta(e: LogEntry, th: Theme): { icon: keyof typeof Ionicons.glyphMap; color: string } {
+  const roleColor =
+    typeof e.params?.r === 'string' && e.params.r in roleColors
+      ? roleColors[e.params.r as keyof typeof roleColors]
+      : undefined;
+  switch (e.key) {
+    case 'logIncome':
+    case 'logForeignAid':
+    case 'logTax':
+    case 'logSteal':
+      return { icon: 'cash-outline', color: th.colors.goldLight };
+    case 'logDeclared':
+    case 'logForeignAidDeclared':
+      return { icon: 'megaphone-outline', color: roleColor ?? th.colors.inkSoft };
+    case 'logBlockDeclared':
+    case 'logForeignAidBlocked':
+    case 'logStealBlocked':
+    case 'logAssassinateBlocked':
+      return { icon: 'shield-half-outline', color: roleColor ?? th.colors.warning };
+    case 'logChallenge':
+      return { icon: 'flash', color: th.colors.warning };
+    case 'logChallengeFailed':
+      return { icon: 'shield-checkmark', color: th.colors.success };
+    case 'logChallengeWon':
+      return { icon: 'flash-off', color: th.colors.danger };
+    case 'logCoup':
+    case 'logAssassinate':
+      return { icon: 'skull', color: th.colors.danger };
+    case 'logLostCard':
+      return { icon: 'close-circle', color: roleColor ?? th.colors.danger };
+    case 'logEliminated':
+    case 'logForfeit':
+      return { icon: 'remove-circle', color: th.colors.inkFaint };
+    case 'logExchange':
+      return { icon: 'swap-horizontal', color: th.colors.goldLight };
+    case 'logWinner':
+      return { icon: 'trophy', color: th.colors.goldLight };
+    default:
+      return { icon: 'ellipse-outline', color: th.colors.inkSoft };
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Opponent seat                                                       */
 /* ------------------------------------------------------------------ */
@@ -163,7 +206,7 @@ function Seat({
 export function GameScreen() {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
-  const { width } = useWindowDimensions();
+  const { width, height: winH } = useWindowDimensions();
   const { lang } = useSettings();
   const { room, myId, move, leave, again } = useRoom();
   const [selAction, setSelAction] = useState<ActionType | null>(null);
@@ -286,7 +329,14 @@ export function GameScreen() {
     panel = (
       <Animated.View entering={FadeIn.duration(180)} style={styles.panel}>
         <Text style={styles.panelTitle}>{mustCoup ? t('mustCoup') : t('chooseAction')}</Text>
-        <View style={styles.actionGrid}>
+        {/* Cap the list height so the seats above always stay visible
+            and tappable (target picking must never be covered). */}
+        <ScrollView
+          style={{ maxHeight: Math.round(winH * 0.34) }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.actionGrid}>
           {actions
             .filter(({ a }) => !selAction || a === selAction)
             .map(({ a, label, desc, cost, role }) => {
@@ -347,7 +397,8 @@ export function GameScreen() {
               </Pressy>
             );
           })}
-        </View>
+          </View>
+        </ScrollView>
         {sel ? (
           <Animated.View entering={FadeIn.duration(160)} style={styles.confirmArea}>
             {sel.role && !myRoles.includes(sel.role) ? (
@@ -552,10 +603,19 @@ export function GameScreen() {
 
       {/* Log strip */}
       <Pressy scaleTo={0.98} style={styles.logStrip} onPress={() => setLogOpen(true)}>
-        <Ionicons name="chatbox-ellipses-outline" size={14} color={theme.colors.goldDark} />
+        {latestLog ? (
+          <Ionicons
+            name={logMeta(latestLog, theme).icon}
+            size={15}
+            color={logMeta(latestLog, theme).color}
+          />
+        ) : (
+          <Ionicons name="chatbox-ellipses-outline" size={14} color={theme.colors.goldDark} />
+        )}
         <Text style={[styles.logText, rtl && styles.rtlText]} numberOfLines={1}>
           {latestLog ? formatLog(latestLog) : '—'}
         </Text>
+        <Ionicons name="chevron-up" size={13} color={theme.colors.inkFaint} />
       </Pressy>
 
       {/* Opponents */}
@@ -629,16 +689,32 @@ export function GameScreen() {
         </Animated.View>
       ) : null}
 
-      {/* Full log */}
+      {/* Full history — visual timeline, latest first */}
       <Modal visible={logOpen} transparent animationType="fade" onRequestClose={() => setLogOpen(false)}>
         <View style={styles.logModalBackdrop}>
           <View style={styles.logModal}>
             <FlatList
               data={[...g.log].reverse()}
               keyExtractor={(_, i) => String(i)}
-              renderItem={({ item }) => (
-                <Text style={[styles.logLine, rtl && styles.rtlText]}>{formatLog(item)}</Text>
-              )}
+              renderItem={({ item, index }) => {
+                const meta = logMeta(item, theme);
+                return (
+                  <View style={[styles.logRow, rtl && styles.rowReverse]}>
+                    <View style={[styles.logIcon, { borderColor: meta.color + '66' }]}>
+                      <Ionicons name={meta.icon} size={15} color={meta.color} />
+                    </View>
+                    <Text
+                      style={[
+                        styles.logLine,
+                        rtl && styles.rtlText,
+                        index === 0 && { color: theme.colors.ink },
+                      ]}
+                    >
+                      {formatLog(item)}
+                    </Text>
+                  </View>
+                );
+              }}
             />
             <Pressy scaleTo={0.95} style={styles.neutralBtn} onPress={() => setLogOpen(false)}>
               <Text style={styles.neutralBtnText}>{t('ok')}</Text>
@@ -1043,12 +1119,28 @@ const makeStyles = (theme: Theme) =>
       padding: 16,
       gap: 10,
     },
-    logLine: {
-      fontSize: 13,
-      fontFamily: font('semibold'),
-      color: theme.colors.inkSoft,
-      paddingVertical: 5,
+    logRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 6,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.border,
+    },
+    logIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      backgroundColor: theme.colors.surfaceElevated,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    logLine: {
+      flex: 1,
+      fontSize: 13,
+      lineHeight: 19,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
     },
   });
