@@ -1,5 +1,9 @@
 import React, { useEffect } from 'react';
-import { I18nManager, View } from 'react-native';
+import { I18nManager, LogBox, View } from 'react-native';
+
+// The Firestore web SDK logs WebChannel transport noise on RN; the LogBox
+// pill it spawns overlays (and steals taps from) the bottom action area.
+LogBox.ignoreLogs([/WebChannelConnection/, /@firebase\/firestore/]);
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

@@ -4,7 +4,7 @@
  * this collection is isolated by security rules).
  */
 import { initializeApp } from 'firebase/app';
-import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import { connectFirestoreEmulator, getFirestore, initializeFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDWfIrhOCq_urMb8gfr3n8a8iNYRZXJQCc',
@@ -16,7 +16,16 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+// React Native's fetch streams don't fully support WebChannel — let the
+// SDK fall back to long polling instead of spamming transport errors.
+// (getFirestore fallback keeps Fast Refresh from re-initializing.)
+export const db = (() => {
+  try {
+    return initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+  } catch {
+    return getFirestore(app);
+  }
+})();
 
 // Local development: point at the Firestore emulator when the bundle is
 // built with EXPO_PUBLIC_FIRESTORE_EMULATOR=host:port (never set in

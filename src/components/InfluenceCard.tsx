@@ -16,6 +16,7 @@ import Animated, {
 import Svg, { Circle, Polygon } from 'react-native-svg';
 import { Role } from '../engine/types';
 import { RoleArt } from './RoleArt';
+import { RolePortrait } from './RolePortrait';
 import { Theme, font, roleColors, useStyles } from '../theme';
 import { t, TKey } from '../i18n';
 
@@ -76,7 +77,10 @@ export function InfluenceCard({ role, dead, width = 96, selected }: Props) {
       {faceUp && role ? (
         <>
           <View style={styles.artWrap}>
-            <RoleArt role={role} size={Math.round(width * 0.52)} />
+            <RolePortrait role={role} size={Math.round(width * 0.6)} ring={2} />
+            <View style={styles.emblem}>
+              <RoleArt role={role} size={Math.round(width * 0.17)} />
+            </View>
           </View>
           <Text
             numberOfLines={1}
@@ -123,6 +127,12 @@ const makeStyles = (theme: Theme) =>
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    emblem: {
+      position: 'absolute',
+      top: 4,
+      left: 4,
+      opacity: 0.9,
     },
     name: {
       fontFamily: font('bold'),

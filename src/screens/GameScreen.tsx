@@ -11,12 +11,23 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeIn, FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { Theme, font, latinFont, roleColors, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
 import { InfluenceCard } from '../components/InfluenceCard';
 import { CoinCount, CoinIcon } from '../components/Coin';
 import { RoleArt } from '../components/RoleArt';
+import { RolePortrait } from '../components/RolePortrait';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useRoom } from '../net/RoomContext';
 import { useSettings } from '../settings';
@@ -62,6 +73,26 @@ function formatLog(e: LogEntry): string {
 /* Opponent seat                                                       */
 /* ------------------------------------------------------------------ */
 
+/** Soft pulsing gold halo behind the active player's seat. */
+function TurnGlow() {
+  const pulse = useSharedValue(0.35);
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(1, { duration: 1100 }), -1, true);
+  }, [pulse]);
+  const anim = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  return (
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, glowStyles.ring, anim]} />
+  );
+}
+
+const glowStyles = StyleSheet.create({
+  ring: {
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#d4a854',
+  },
+});
+
 function Seat({
   p,
   isTurn,
@@ -93,6 +124,7 @@ function Seat({
         dead && styles.seatDead,
       ]}
     >
+      {isTurn ? <TurnGlow /> : null}
       <View style={styles.seatHead}>
         <Text style={styles.seatName} numberOfLines={1}>
           {p.name}
@@ -263,13 +295,14 @@ export function GameScreen() {
                 onPress={() => declare(a)}
                 style={[
                   styles.actionChip,
-                  role ? { borderColor: roleColors[role] + '88' } : null,
+                  role
+                    ? { borderColor: roleColors[role], backgroundColor: roleColors[role] + '24' }
+                    : null,
                   a === 'coup' ? styles.coupChip : null,
-                  disabled && styles.chipDisabled,
                 ]}
               >
                 {role ? (
-                  <RoleArt role={role} size={17} />
+                  <RolePortrait role={role} size={24} ring={1.5} />
                 ) : (
                   <Ionicons
                     name={a === 'coup' ? 'skull' : a === 'income' ? 'add' : 'cash-outline'}
@@ -301,6 +334,11 @@ export function GameScreen() {
 
     panel = (
       <Animated.View entering={FadeInUp.duration(220)} style={styles.panel}>
+        {claimedRole ? (
+          <View style={styles.claimRow}>
+            <RolePortrait role={claimedRole} size={44} ring={2} />
+          </View>
+        ) : null}
         <Text style={styles.panelTitle}>
           {g.phase === 'block'
             ? `${t('declares', { name: actorName, action: actionLabel })}${
@@ -321,10 +359,13 @@ export function GameScreen() {
                 key={r}
                 scaleTo={0.94}
                 disabled={sending}
-                style={[styles.blockBtn, { borderColor: roleColors[r] }]}
+                style={[
+                  styles.blockBtn,
+                  { borderColor: roleColors[r], backgroundColor: roleColors[r] + '22' },
+                ]}
                 onPress={() => dispatch({ type: 'block', role: r })}
               >
-                <RoleArt role={r} size={18} />
+                <RolePortrait role={r} size={26} ring={1.5} />
                 <Text style={[styles.blockBtnText, { color: roleColors[r] }]}>
                   {t('blockWith', { role: t(r as TKey) })}
                 </Text>
@@ -424,6 +465,13 @@ export function GameScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
+      <LinearGradient
+        colors={['#1c1610', '#12100d', '#191007']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       {/* Header */}
       <View style={[styles.header, rtl && styles.rowReverse]}>
         <Pressy scaleTo={0.85} style={styles.iconBtn} onPress={onLeave} hitSlop={8}>
@@ -728,9 +776,14 @@ const makeStyles = (theme: Theme) =>
     },
     coupChip: {
       borderColor: theme.colors.danger,
+      backgroundColor: 'rgba(217, 83, 79, 0.16)',
     },
     chipDisabled: {
       opacity: 0.35,
+    },
+    claimRow: {
+      alignItems: 'center',
+      marginBottom: -2,
     },
     chipLabel: {
       fontSize: 13,

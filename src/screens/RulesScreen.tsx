@@ -7,6 +7,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Theme, font, roleColors, useStyles } from '../theme';
 import { RoleArt } from '../components/RoleArt';
+import { RolePortrait } from '../components/RolePortrait';
 import { useSettings } from '../settings';
 import { Role, ROLES } from '../engine/types';
 import { t, TKey, isRTL } from '../i18n';
@@ -44,8 +45,11 @@ export function RulesScreen() {
         <Text style={[styles.sectionTitle, rtlText, { marginTop: 8 }]}>{t('rolesTitle')}</Text>
         {ROLES.map((r) => (
           <View key={r} style={[styles.roleRow, rtl && styles.rowReverse]}>
-            <View style={[styles.roleArt, { borderColor: roleColors[r] + '55' }]}>
-              <RoleArt role={r} size={34} />
+            <View style={styles.roleArtWrap}>
+              <RolePortrait role={r} size={52} ring={2} />
+              <View style={styles.roleEmblem}>
+                <RoleArt role={r} size={15} />
+              </View>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.roleName, rtlText, { color: roleColors[r] }]}>
@@ -113,14 +117,21 @@ const makeStyles = (theme: Theme) =>
       padding: 12,
       marginBottom: 8,
     },
-    roleArt: {
-      width: 54,
-      height: 54,
-      borderRadius: theme.radius.sm,
-      borderWidth: 1.5,
-      backgroundColor: theme.colors.surfaceElevated,
+    roleArtWrap: {
+      width: 58,
+      height: 58,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    roleEmblem: {
+      position: 'absolute',
+      bottom: -2,
+      right: -4,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderRadius: 10,
+      padding: 2,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
     },
     roleName: {
       fontSize: 15,

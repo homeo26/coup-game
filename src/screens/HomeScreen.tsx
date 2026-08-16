@@ -19,9 +19,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Theme, font, latinFont, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
+import { RolePortrait } from '../components/RolePortrait';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useSettings } from '../settings';
 import { useRoom } from '../net/RoomContext';
+import { ROLES } from '../engine/types';
 import { t, TKey, isRTL } from '../i18n';
 import * as haptics from '../haptics';
 
@@ -113,6 +115,18 @@ export function HomeScreen() {
               resizeMode="contain"
             />
             <Text style={styles.tag}>{t('homeTag')}</Text>
+            {/* the cast — staggered entrance, alternating lift */}
+            <View style={styles.cast}>
+              {ROLES.map((r, i) => (
+                <Animated.View
+                  key={r}
+                  entering={FadeInDown.duration(380).delay(140 + i * 70)}
+                  style={{ transform: [{ translateY: i % 2 === 0 ? 0 : 10 }] }}
+                >
+                  <RolePortrait role={r} size={58} ring={2.5} />
+                </Animated.View>
+              ))}
+            </View>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.duration(400).delay(80)} style={styles.card}>
@@ -197,6 +211,12 @@ const makeStyles = (theme: Theme) =>
       fontFamily: font('semibold'),
       color: theme.colors.inkSoft,
       marginTop: -6,
+    },
+    cast: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 16,
+      alignItems: 'center',
     },
     card: {
       backgroundColor: theme.colors.surface,
