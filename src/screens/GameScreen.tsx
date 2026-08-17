@@ -283,23 +283,30 @@ function TableSeat({
         onPress={onTarget}
         style={styles.seatInner}
       >
-        {/* card fan peeking from behind the avatar */}
+        {/* card fan peeking from behind the avatar; a killed character
+            shows as a real face-up card at card proportions */}
         <View style={styles.fan} pointerEvents="none">
-          {p.cards.map((c, i) => (
-            <View
-              key={i}
-              style={[
-                styles.fanCard,
-                { transform: [{ rotate: `${i === 0 ? -16 : 16}deg` }, { translateY: -3 }] },
-                c.revealed && {
-                  backgroundColor: roleColors[c.role] + '33',
-                  borderColor: roleColors[c.role] + 'aa',
-                },
-              ]}
-            >
-              {c.revealed ? <RoleArt role={c.role} size={11} color={roleColors[c.role]} /> : null}
-            </View>
-          ))}
+          {p.cards.map((c, i) =>
+            c.revealed ? (
+              <Animated.View
+                key={i}
+                entering={FlipInEasyY.duration(500)}
+                style={{
+                  transform: [{ rotate: `${i === 0 ? -15 : 15}deg` }, { translateY: -14 }],
+                }}
+              >
+                <InfluenceCard role={c.role} dead width={44} />
+              </Animated.View>
+            ) : (
+              <View
+                key={i}
+                style={[
+                  styles.fanCard,
+                  { transform: [{ rotate: `${i === 0 ? -16 : 16}deg` }, { translateY: -3 }] },
+                ]}
+              />
+            ),
+          )}
         </View>
         <Animated.View style={nudgeStyle}>
           <View style={dead ? styles.seatDeadAvatar : undefined}>
