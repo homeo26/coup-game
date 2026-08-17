@@ -418,6 +418,8 @@ export function GameScreen() {
   const [sending, setSending] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [deckOpen, setDeckOpen] = useState(false);
+  const [sheetH, setSheetH] = useState(0);
+  const [myAreaH, setMyAreaH] = useState(0);
   const [banner, setBanner] = useState<{ entry: LogEntry; key: number } | null>(null);
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   void lang;
@@ -582,7 +584,7 @@ export function GameScreen() {
         {/* Cap the list height so the seats above always stay visible
             and tappable (target picking must never be covered). */}
         <ScrollView
-          style={{ maxHeight: Math.round(winH * 0.34) }}
+          style={{ maxHeight: Math.round(winH * 0.30) }}
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}
         >
@@ -902,7 +904,15 @@ export function GameScreen() {
 
       {/* The table: green felt, silver rim, seats around the edge, the
           Court and the event banner at its center — a real card table. */}
-      <View style={styles.tableArea}>
+      <Animated.View
+        layout={LinearTransition.duration(260)}
+        style={[
+          styles.tableArea,
+          needsMe && g.phase !== 'game_over'
+            ? { marginBottom: Math.max(0, sheetH - myAreaH + 8) }
+            : null,
+        ]}
+      >
         <View style={styles.tableRimOuter}>
           <LinearGradient
             colors={['#2e5c41', '#1f4630', '#173423']}
@@ -962,10 +972,10 @@ export function GameScreen() {
             }}
           />
         ))}
-      </View>
+      </Animated.View>
 
       {/* My area */}
-      <View style={styles.myArea}>
+      <View style={styles.myArea} onLayout={(e) => setMyAreaH(e.nativeEvent.layout.height)}>
         <View style={[styles.myHead, rtl && styles.rowReverse]}>
           <View style={[styles.myIdent, rtl && styles.rowReverse]}>
             <Avatar id={avatarOf(me.id)} size={26} ring={1.5} />
@@ -1015,6 +1025,7 @@ export function GameScreen() {
           key={`sheet-${g.phase}`}
           entering={SlideInDown.duration(320)}
           style={styles.sheet}
+          onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
         >
           <View style={styles.sheetHandle} />
           {panel}
