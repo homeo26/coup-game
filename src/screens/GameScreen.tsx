@@ -355,6 +355,40 @@ function TableSeat({
   );
 }
 
+/** The table graveyard: dead cards stack like solitaire foundations,
+ *  one overlapping pile per character type. New kills flip in. */
+function DiscardPiles({ g }: { g: GameState }) {
+  const styles = useStyles(makeStyles);
+  const CARD_W = 34;
+  const CARD_H = Math.round(CARD_W * 1.42);
+  const STEP = 13;
+  const piles = ROLES.map((r) => ({
+    role: r,
+    n: g.players.reduce(
+      (k, p) => k + p.cards.filter((c) => c.revealed && c.role === r).length,
+      0,
+    ),
+  })).filter((x) => x.n > 0);
+  if (piles.length === 0) return null;
+  return (
+    <View style={styles.pilesRow}>
+      {piles.map(({ role, n }) => (
+        <View key={role} style={{ width: CARD_W, height: CARD_H + (n - 1) * STEP }}>
+          {Array.from({ length: n }).map((_, i) => (
+            <Animated.View
+              key={i}
+              entering={FlipInEasyY.duration(450)}
+              style={{ position: 'absolute', top: i * STEP }}
+            >
+              <InfluenceCard role={role} dead width={CARD_W} />
+            </Animated.View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Deck tracker — all 15 cards at a glance                             */
 /* ------------------------------------------------------------------ */
@@ -509,9 +543,6 @@ export function GameScreen() {
     if (g && g.version > 0) dealtFor.current = g.version;
   }, [g]);
 
-  // A lost influence card is exposed at the table center for everyone.
-  const [exposed, setExposed] = useState<{ role: Role; name: string; key: number } | null>(null);
-
   // Every new game event floats an animated banner over the table, so
   // mid-game actions are impossible to miss.
   const logLen = g?.log.length ?? 0;
@@ -526,16 +557,6 @@ export function GameScreen() {
       } else {
         const cue = logSound(entry.key, entry.params?.r as string | undefined);
         if (cue) sound.play(cue);
-      }
-      if (entry.key === 'logLostCard' && entry.params?.r) {
-        // Show the dead card itself on the felt — everyone sees the kill.
-        setExposed({
-          role: entry.params.r as Role,
-          name: String(entry.params.a ?? ''),
-          key: logLen,
-        });
-        const timer = setTimeout(() => setExposed((e) => (e?.key === logLen ? null : e)), 2800);
-        return () => clearTimeout(timer);
       }
       setBanner({ entry, key: logLen });
       const timer = setTimeout(() => setBanner((b) => (b?.key === logLen ? null : b)), 2100);
@@ -970,24 +991,14 @@ export function GameScreen() {
             <View style={styles.feltInnerLine} pointerEvents="none" />
             {/* table center: the Court + reveals + event banner */}
             <View style={styles.tableCenter} pointerEvents="none">
-              {exposed ? (
-                <Animated.View
-                  key={exposed.key}
-                  entering={FlipInEasyY.duration(520)}
-                  exiting={FadeOut.duration(320)}
-                  style={styles.exposedWrap}
-                >
-                  <InfluenceCard role={exposed.role} dead width={92} />
-                  <Text style={styles.exposedText} numberOfLines={1}>
-                    {exposed.name}
-                  </Text>
-                </Animated.View>
-              ) : null}
-              <View style={styles.courtStack}>
-                {[2, 1, 0].map((i) => (
-                  <View key={i} style={[styles.courtCard, { top: -i * 3, left: i * 2 }]} />
-                ))}
-                <Text style={styles.courtCount}>{g.deck.length}</Text>
+              <View style={styles.centerRow}>
+                <View style={styles.courtStack}>
+                  {[2, 1, 0].map((i) => (
+                    <View key={i} style={[styles.courtCard, { top: -i * 3, left: i * 2 }]} />
+                  ))}
+                  <Text style={styles.courtCount}>{g.deck.length}</Text>
+                </View>
+                <DiscardPiles g={g} />
               </View>
               {banner && g.phase !== 'game_over' ? (
                 <Animated.View
@@ -1314,15 +1325,15 @@ const makeStyles = (theme: Theme) =>
       gap: 10,
       maxWidth: '72%',
     },
-    exposedWrap: {
-      alignItems: 'center',
-      gap: 4,
-      marginBottom: 6,
+    centerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
     },
-    exposedText: {
-      fontSize: 11,
-      fontFamily: font('bold'),
-      color: 'rgba(255,255,255,0.85)',
+    pilesRow: {
+      flexDirection: 'row',
+      gap: 6,
+      alignItems: 'flex-start',
     },
     courtStack: {
       width: 44,
