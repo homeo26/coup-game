@@ -6,6 +6,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import PagerView from 'react-native-pager-view';
 import { ChatScreen } from '../src/screens/ChatScreen';
 import { HomeScreen } from '../src/screens/HomeScreen';
@@ -22,9 +23,12 @@ import { Theme, useStyles } from '../src/theme';
 
 function PlayTab() {
   const { room } = useRoom();
-  if (!room) return <HomeScreen />;
-  if (room.status === 'lobby') return <LobbyScreen />;
-  return <GameScreen />;
+  const stage = !room ? 'home' : room.status === 'lobby' ? 'lobby' : 'game';
+  return (
+    <Animated.View key={stage} entering={FadeIn.duration(380)} style={{ flex: 1 }}>
+      {stage === 'home' ? <HomeScreen /> : stage === 'lobby' ? <LobbyScreen /> : <GameScreen />}
+    </Animated.View>
+  );
 }
 
 export default function TabsHost() {

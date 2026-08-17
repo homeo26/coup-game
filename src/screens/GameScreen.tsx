@@ -16,8 +16,10 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeOut,
+  FlipInEasyY,
   LinearTransition,
   SlideInDown,
+  ZoomIn,
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
@@ -490,6 +492,19 @@ export function GameScreen() {
     setKeepIdxs([]);
   }, [g?.version]);
 
+  // A fresh game opens with the shuffle of a new Court deck.
+  const dealtFor = useRef<number>(-1);
+  useEffect(() => {
+    if (g && g.version === 0 && dealtFor.current !== 0 && g.phase !== 'game_over') {
+      dealtFor.current = 0;
+      sound.play('shuffle');
+    }
+    if (g && g.version > 0) dealtFor.current = g.version;
+  }, [g]);
+
+  // A lost influence card is exposed at the table center for everyone.
+  const [exposed, setExposed] = useState<{ role: Role; name: string; key: number } | null>(null);
+
   // Every new game event floats an animated banner over the table, so
   // mid-game actions are impossible to miss.
   const logLen = g?.log.length ?? 0;
@@ -504,6 +519,16 @@ export function GameScreen() {
       } else {
         const cue = logSound(entry.key, entry.params?.r as string | undefined);
         if (cue) sound.play(cue);
+      }
+      if (entry.key === 'logLostCard' && entry.params?.r) {
+        // Show the dead card itself on the felt — everyone sees the kill.
+        setExposed({
+          role: entry.params.r as Role,
+          name: String(entry.params.a ?? ''),
+          key: logLen,
+        });
+        const timer = setTimeout(() => setExposed((e) => (e?.key === logLen ? null : e)), 2800);
+        return () => clearTimeout(timer);
       }
       setBanner({ entry, key: logLen });
       const timer = setTimeout(() => setBanner((b) => (b?.key === logLen ? null : b)), 2100);
@@ -601,7 +626,7 @@ export function GameScreen() {
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.actionGrid}>
+          <Animated.View style={styles.actionGrid} layout={LinearTransition.duration(220)}>
           {actions
             .filter(({ a }) => !selAction || a === selAction)
             .map(({ a, label, desc, cost, role }) => {
@@ -616,8 +641,8 @@ export function GameScreen() {
             const isBluff = !!role && !myRoles.includes(role);
             const color = role ? roleColors[role] : a === 'coup' ? theme.colors.danger : theme.colors.gold;
             return (
+              <Animated.View key={a} entering={FadeIn.duration(180)} layout={LinearTransition.duration(220)}>
               <Pressy
-                key={a}
                 scaleTo={0.96}
                 disabled={disabled}
                 onPress={() => selectAction(a)}
@@ -660,9 +685,10 @@ export function GameScreen() {
                   </Text>
                 </View>
               </Pressy>
+              </Animated.View>
             );
           })}
-          </View>
+          </Animated.View>
         </ScrollView>
         {sel ? (
           <Animated.View entering={FadeIn.duration(160)} style={styles.confirmArea}>
@@ -935,8 +961,21 @@ export function GameScreen() {
           >
             {/* felt inner shade line */}
             <View style={styles.feltInnerLine} pointerEvents="none" />
-            {/* table center: the Court + floating event banner */}
+            {/* table center: the Court + reveals + event banner */}
             <View style={styles.tableCenter} pointerEvents="none">
+              {exposed ? (
+                <Animated.View
+                  key={exposed.key}
+                  entering={FlipInEasyY.duration(520)}
+                  exiting={FadeOut.duration(320)}
+                  style={styles.exposedWrap}
+                >
+                  <InfluenceCard role={exposed.role} dead width={92} />
+                  <Text style={styles.exposedText} numberOfLines={1}>
+                    {exposed.name}
+                  </Text>
+                </Animated.View>
+              ) : null}
               <View style={styles.courtStack}>
                 {[2, 1, 0].map((i) => (
                   <View key={i} style={[styles.courtCard, { top: -i * 3, left: i * 2 }]} />
@@ -969,6 +1008,12 @@ export function GameScreen() {
         </View>
         {/* seats straddle the rim */}
         {opponents.map((p, i) => (
+          <Animated.View
+            key={`in-${p.id}`}
+            entering={ZoomIn.duration(360).delay(120 + i * 90)}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="box-none"
+          >
           <TableSeat
             key={p.id}
             p={p}
@@ -984,6 +1029,7 @@ export function GameScreen() {
               setSelTarget(p.id);
             }}
           />
+          </Animated.View>
         ))}
       </Animated.View>
 
@@ -1260,6 +1306,16 @@ const makeStyles = (theme: Theme) =>
       alignItems: 'center',
       gap: 10,
       maxWidth: '72%',
+    },
+    exposedWrap: {
+      alignItems: 'center',
+      gap: 4,
+      marginBottom: 6,
+    },
+    exposedText: {
+      fontSize: 11,
+      fontFamily: font('bold'),
+      color: 'rgba(255,255,255,0.85)',
     },
     courtStack: {
       width: 44,
