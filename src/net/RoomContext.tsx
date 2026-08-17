@@ -136,7 +136,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     // Humans don't move instantly: quick for passes, slower when the
     // bot is "thinking" about its own turn.
     const isBotTurn = localGame.players[localGame.turn]?.id === botId && localGame.phase === 'action';
-    const delay = isBotTurn ? 1800 + Math.random() * 1700 : 1100 + Math.random() * 1100;
+    const delay = isBotTurn ? 3200 + Math.random() * 2800 : 1600 + Math.random() * 1600;
     botTimer.current = setTimeout(() => {
       setLocalGame((g) => {
         if (!g || g.phase === 'game_over') return g;

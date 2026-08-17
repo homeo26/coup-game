@@ -78,9 +78,27 @@ export function decideBot(g: GameState, myId: string): Move | null {
       if (options.length > 0 && Math.random() < 0.2) return { type: 'block', role: pick(options) };
       return { type: 'pass' };
     }
-    // Challenge windows: suspicious roughly a quarter of the time
-    if ((g.phase === 'action_challenge' || g.phase === 'block_challenge') && Math.random() < 0.25) {
-      return { type: 'challenge' };
+    // Challenge windows: the table's TOTAL suspicion should stay modest,
+    // so each bot's share shrinks with the number of players who could
+    // challenge. Card counting sharpens it: copies of the claimed role
+    // this bot can see (its own hand + everyone's revealed cards) make
+    // the claim less plausible — and three visible copies prove a bluff.
+    if (g.phase === 'action_challenge' || g.phase === 'block_challenge') {
+      const claimed =
+        g.phase === 'action_challenge' ? g.pending!.claimedRole : g.pending!.block?.role;
+      if (claimed) {
+        const visible =
+          myRoles.filter((r) => r === claimed).length +
+          g.players.reduce(
+            (k, pl) => k + pl.cards.filter((c) => c.revealed && c.role === claimed).length,
+            0,
+          );
+        if (visible >= 3) return { type: 'challenge' }; // impossible claim
+        const others = Math.max(1, g.players.filter(isAlive).length - 1);
+        const chance = (0.28 / others) * (1 + visible * 0.9);
+        if (Math.random() < chance) return { type: 'challenge' };
+      }
+      return { type: 'pass' };
     }
     return { type: 'pass' };
   }
