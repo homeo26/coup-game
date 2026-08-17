@@ -81,11 +81,11 @@ export function Avatar({
             borderRadius: size / 2,
             borderWidth: ring,
             borderColor: tint,
-            backgroundColor: tint + '2e',
+            backgroundColor: '#232733', // solid backdrop — pops on any surface
           },
         ]}
       >
-        <Image source={ART[id]} style={{ width: size * 0.78, height: size * 0.78 }} />
+        <Image source={ART[id]} style={{ width: size * 0.84, height: size * 0.84 }} />
       </View>
     );
   }

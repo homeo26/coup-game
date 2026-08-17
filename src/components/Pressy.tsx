@@ -18,6 +18,9 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 interface Props extends Omit<PressableProps, 'style'> {
   style?: StyleProp<ViewStyle>;
   scaleTo?: number;
+  /** Keep full opacity while disabled (for elements that are usually
+   *  non-interactive, like table seats outside a targeting window). */
+  noDimWhenDisabled?: boolean;
   children?: React.ReactNode;
 }
 
@@ -27,16 +30,18 @@ export function Pressy({
   onPressIn,
   onPressOut,
   disabled,
+  noDimWhenDisabled,
   children,
   ...rest
 }: Props) {
   const theme = useTheme();
   const pressed = useSharedValue(0);
-  const dim = useSharedValue(disabled ? 1 : 0);
+  const dimTarget = disabled && !noDimWhenDisabled ? 1 : 0;
+  const dim = useSharedValue(dimTarget);
 
   React.useEffect(() => {
-    dim.value = withTiming(disabled ? 1 : 0, { duration: 150 });
-  }, [disabled, dim]);
+    dim.value = withTiming(dimTarget, { duration: 150 });
+  }, [dimTarget, dim]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: 1 - pressed.value * (1 - scaleTo) }],

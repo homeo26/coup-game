@@ -120,7 +120,14 @@ function logMeta(e: LogEntry, th: Theme): { icon: keyof typeof Ionicons.glyphMap
 }
 
 /** Which cue a game event plays (null = silent). */
-function logSound(key: string): sound.SoundKey | null {
+function logSound(key: string, role?: string): sound.SoundKey | null {
+  // A claimed character announces itself in its own voice.
+  if (key === 'logDeclared' && role && sound.ROLE_VOICE[role]) {
+    return sound.ROLE_VOICE[role];
+  }
+  if (key === 'logBlockDeclared' && role === 'contessa') {
+    return sound.ROLE_VOICE.contessa;
+  }
   switch (key) {
     case 'logIncome':
     case 'logForeignAid':
@@ -267,7 +274,13 @@ function TableSeat({
         },
       ]}
     >
-      <Pressy scaleTo={0.93} disabled={!targetable} onPress={onTarget} style={styles.seatInner}>
+      <Pressy
+        scaleTo={0.93}
+        disabled={!targetable}
+        noDimWhenDisabled
+        onPress={onTarget}
+        style={styles.seatInner}
+      >
         {/* card fan peeking from behind the avatar */}
         <View style={styles.fan} pointerEvents="none">
           {p.cards.map((c, i) => (
@@ -288,7 +301,7 @@ function TableSeat({
         </View>
         <Animated.View style={nudgeStyle}>
           <View style={dead ? styles.seatDeadAvatar : undefined}>
-            <Avatar id={avatar} size={52} ring={2} />
+            <Avatar id={avatar} size={58} ring={2.5} />
           </View>
           {/* pulsing turn ring */}
           <Animated.View pointerEvents="none" style={[styles.turnRing, ringStyle]} />
@@ -489,7 +502,7 @@ export function GameScreen() {
       if (entry.key === 'logWinner') {
         sound.play(g.winner && g.winner === myId ? 'win' : 'lose');
       } else {
-        const cue = logSound(entry.key);
+        const cue = logSound(entry.key, entry.params?.r as string | undefined);
         if (cue) sound.play(cue);
       }
       setBanner({ entry, key: logLen });
@@ -1298,8 +1311,8 @@ const makeStyles = (theme: Theme) =>
       position: 'absolute',
       top: -4,
       left: -4,
-      width: 60,
-      height: 60,
+      width: 66,
+      height: 66,
       borderRadius: 30,
       borderWidth: 2.5,
       borderColor: theme.colors.gold,
@@ -1309,8 +1322,8 @@ const makeStyles = (theme: Theme) =>
       position: 'absolute',
       top: -4,
       left: -4,
-      width: 60,
-      height: 60,
+      width: 66,
+      height: 66,
       borderRadius: 30,
       borderWidth: 2.5,
       borderColor: theme.colors.danger,
@@ -1319,7 +1332,7 @@ const makeStyles = (theme: Theme) =>
       justifyContent: 'center',
     },
     seatDeadAvatar: {
-      opacity: 0.45,
+      opacity: 0.62,
     },
     deadBadge: {
       position: 'absolute',
@@ -1346,7 +1359,7 @@ const makeStyles = (theme: Theme) =>
       justifyContent: 'center',
     },
     seatNameChip: {
-      backgroundColor: 'rgba(10, 12, 16, 0.82)',
+      backgroundColor: 'rgba(8, 10, 14, 0.95)',
       borderRadius: theme.radius.pill,
       paddingHorizontal: 9,
       paddingVertical: 2,

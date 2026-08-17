@@ -25,7 +25,23 @@ const SOURCES = {
   lose: require('../assets/sounds/lose.m4a'), // eliminated
   tap: require('../assets/sounds/tap.m4a'), // confirm press
   chat: require('../assets/sounds/chat.m4a'), // incoming chat message
+  // Character voice stingers (Piper TTS, processed): played when the
+  // character is claimed for an action (or the Contessa blocks).
+  voiceDuke: require('../assets/sounds/roles/duke.m4a'),
+  voiceAssassin: require('../assets/sounds/roles/assassin.m4a'),
+  voiceCaptain: require('../assets/sounds/roles/captain.m4a'),
+  voiceAmbassador: require('../assets/sounds/roles/ambassador.m4a'),
+  voiceContessa: require('../assets/sounds/roles/contessa.m4a'),
 } as const;
+
+/** Voice stinger for a claimed character, if we have one. */
+export const ROLE_VOICE: Record<string, SoundKey> = {
+  duke: 'voiceDuke',
+  assassin: 'voiceAssassin',
+  captain: 'voiceCaptain',
+  ambassador: 'voiceAmbassador',
+  contessa: 'voiceContessa',
+};
 
 export type SoundKey = keyof typeof SOURCES;
 
