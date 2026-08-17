@@ -227,6 +227,7 @@ function TableSeat({
   targetable,
   onTarget,
   anchor,
+  showFaces,
 }: {
   p: PlayerState;
   avatar?: string;
@@ -236,6 +237,8 @@ function TableSeat({
   targetable: boolean;
   onTarget: () => void;
   anchor: { x: number; y: number };
+  /** Render this seat's hidden cards face-up (the player's own seat). */
+  showFaces?: boolean;
 }) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
@@ -287,7 +290,7 @@ function TableSeat({
             shows as a real face-up card at card proportions */}
         <View style={styles.fan} pointerEvents="none">
           {p.cards.map((c, i) =>
-            c.revealed ? (
+            c.revealed || showFaces ? (
               <Animated.View
                 key={i}
                 entering={FlipInEasyY.duration(500)}
@@ -295,7 +298,7 @@ function TableSeat({
                   transform: [{ rotate: `${i === 0 ? -15 : 15}deg` }, { translateY: -14 }],
                 }}
               >
-                <InfluenceCard role={c.role} dead width={44} />
+                <InfluenceCard role={c.role} dead={c.revealed} width={44} />
               </Animated.View>
             ) : (
               <View
@@ -1049,6 +1052,19 @@ export function GameScreen() {
           />
           </Animated.View>
         ))}
+        {/* me, seated at the bottom of the table — my cards face-up so
+            I always see what I hold, even with the sheet open */}
+        <TableSeat
+          p={me}
+          avatar={avatarOf(me.id)}
+          emote={emotes.get(me.id) ?? null}
+          isTurn={current?.id === me.id && g.phase !== 'game_over'}
+          responding={responders.includes(me.id)}
+          targetable={false}
+          onTarget={() => {}}
+          anchor={{ x: 0.5, y: 0.78 }}
+          showFaces
+        />
       </Animated.View>
 
       {/* My area */}
