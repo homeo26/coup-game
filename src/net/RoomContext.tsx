@@ -73,8 +73,8 @@ const RoomContext = createContext<RoomState>({
 
 /** Emoji palette bots draw from when they feel chatty. */
 const BOT_EMOTES = ['😏', '😂', '🤔', '😱', '🔥', '💀', '👑'];
-/** Distinct character avatars handed to offline bots by seat. */
-const ROLES_FOR_BOTS = ['duke', 'captain', 'contessa', 'assassin', 'ambassador'];
+/** Distinct animal avatars handed to offline bots by seat. */
+const ROLES_FOR_BOTS = ['monkey', 'penguin', 'frog', 'elephant', 'owl'];
 
 export function RoomProvider({ children }: { children: React.ReactNode }) {
   const [myId, setMyId] = useState<string | null>(null);
@@ -133,6 +133,10 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       .map((p) => p.id)
       .find((id) => id !== myId && decideBot(localGame, id) !== null);
     if (!botId) return;
+    // Humans don't move instantly: quick for passes, slower when the
+    // bot is "thinking" about its own turn.
+    const isBotTurn = localGame.players[localGame.turn]?.id === botId && localGame.phase === 'action';
+    const delay = isBotTurn ? 1800 + Math.random() * 1700 : 1100 + Math.random() * 1100;
     botTimer.current = setTimeout(() => {
       setLocalGame((g) => {
         if (!g || g.phase === 'game_over') return g;
@@ -160,7 +164,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         }
         return r.error ? { ...g } : r.state;
       });
-    }, 650 + Math.random() * 650);
+    }, delay);
     return () => {
       if (botTimer.current) clearTimeout(botTimer.current);
     };

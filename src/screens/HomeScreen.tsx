@@ -20,11 +20,10 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Theme, font, latinFont, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
 import { Breathing } from '../components/Breathing';
-import { RolePortrait } from '../components/RolePortrait';
+import { ANIMALS, Avatar } from '../components/Avatar';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useSettings } from '../settings';
 import { useRoom } from '../net/RoomContext';
-import { ROLES } from '../engine/types';
 import { t, TKey, isRTL } from '../i18n';
 import * as haptics from '../haptics';
 
@@ -129,17 +128,13 @@ export function HomeScreen() {
               resizeMode="contain"
             />
             <Text style={styles.tag}>{t('homeTag')}</Text>
-            {/* the cast — pick your avatar */}
+            {/* pick your animal avatar */}
             <Text style={styles.avatarLabel}>{t('avatarLabel')}</Text>
             <View style={styles.cast}>
-              {ROLES.map((r, i) => {
+              {ANIMALS.map((r, i) => {
                 const selected = avatar === r;
                 return (
-                  <Animated.View
-                    key={r}
-                    entering={FadeInDown.duration(380).delay(140 + i * 70)}
-                    style={{ transform: [{ translateY: i % 2 === 0 ? 0 : 10 }] }}
-                  >
+                  <Animated.View key={r} entering={FadeInDown.duration(320).delay(80 + i * 35)}>
                     <Pressy
                       scaleTo={0.88}
                       onPress={() => {
@@ -148,7 +143,7 @@ export function HomeScreen() {
                       }}
                       style={[styles.avatarWrap, selected && styles.avatarSel]}
                     >
-                      <RolePortrait role={r} size={selected ? 60 : 52} ring={selected ? 3 : 2} />
+                      <Avatar id={r} size={selected ? 54 : 46} ring={selected ? 3 : 1.5} />
                       {selected ? (
                         <View style={styles.avatarCheck}>
                           <Ionicons name="checkmark" size={11} color={theme.colors.inkOnGold} />
@@ -279,10 +274,12 @@ const makeStyles = (theme: Theme) =>
     },
     cast: {
       flexDirection: 'row',
-      gap: 8,
+      flexWrap: 'wrap',
+      gap: 6,
       marginTop: 6,
       alignItems: 'center',
-      height: 72,
+      justifyContent: 'center',
+      maxWidth: 400,
     },
     avatarLabel: {
       fontSize: 12,
@@ -291,8 +288,8 @@ const makeStyles = (theme: Theme) =>
       marginTop: 12,
     },
     avatarWrap: {
-      width: 64,
-      height: 64,
+      width: 58,
+      height: 58,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 32,

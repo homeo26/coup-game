@@ -15,21 +15,19 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Theme, font, roleColors, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
-import { RolePortrait } from '../components/RolePortrait';
+import { Avatar } from '../components/Avatar';
 import { useRoom } from '../net/RoomContext';
 import { useSettings } from '../settings';
-import { Role } from '../engine/types';
 import { t, TKey, isRTL } from '../i18n';
 import * as haptics from '../haptics';
 import * as sound from '../sound';
 
 export const EMOTES = ['😂', '😏', '🤔', '😱', '🔥', '👑', '💀', '🫣'];
 export const TAUNT_KEYS: TKey[] = ['tauntBluff', 'tauntComeAtMe', 'tauntNice', 'tauntScared'];
-
-const AVATAR_FALLBACK: Role = 'duke';
 
 export function ChatScreen() {
   const theme = useTheme();
@@ -69,25 +67,27 @@ export function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <Text style={[styles.title, rtl && styles.rtlText]}>{t('chatTitle')}</Text>
-        <FlatList
+        <Animated.FlatList
           ref={listRef}
           inverted
           data={messages}
           keyExtractor={(m) => `${m.u}-${m.ts}`}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
+          itemLayoutAnimation={LinearTransition.duration(220)}
+          renderItem={({ item, index }) => {
             const mine = item.u === myId;
             const isEmote = item.k === 'emote';
+            // Inverted list: index 0 is the newest — give it a slide-in;
+            // older rows shift down via the layout transition.
             return (
-              <View
+              <Animated.View
+                entering={index === 0 ? FadeInUp.duration(280) : FadeInDown.duration(200)}
                 style={[
                   styles.msgRow,
                   (rtl ? !mine : mine) && styles.msgRowMine,
                 ]}
               >
-                {!mine ? (
-                  <RolePortrait role={(item.a as Role) ?? AVATAR_FALLBACK} size={28} ring={1.5} />
-                ) : null}
+                {!mine ? <Avatar id={item.a} size={28} ring={1.5} /> : null}
                 <View
                   style={[
                     styles.bubble,
@@ -102,7 +102,7 @@ export function ChatScreen() {
                     {item.k === 'taunt' ? t(item.v as TKey) : item.v}
                   </Text>
                 </View>
-              </View>
+              </Animated.View>
             );
           }}
           ListEmptyComponent={

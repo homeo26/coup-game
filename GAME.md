@@ -183,9 +183,10 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
 - **Garbage collection** (no server, so clients clean up):
   - Leaving a playing room records the leaver in a `left[]` field; the
     last participant to leave **deletes the doc**.
-  - Every room creation opportunistically sweeps up to 10 rooms older
-    than 24h (`createdAtMs` query) — abandoned docs don't accumulate.
-  - `playAgain` resets `left` for the fresh game.
+  - Moves that end the game stamp `finishedAtMs`; every room creation
+    sweeps finished games older than 2h — chat, history, everything —
+    plus any room older than 24h (`createdAtMs`).
+  - `playAgain` resets `left`, clears `chat` and `finishedAtMs`.
 
 ### Offline mode (vs bots)
 
@@ -203,12 +204,13 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
 
 - Three always-mounted tabs (Play / Rules / More) in a pager; the Play
   tab morphs Home → Lobby → Game table with the room status.
-- Opponents render as a **single-column scoreboard** (one compact row
-  per player: turn/response state icon, name, influence indicators,
-  coins) so every player is visible at a glance with no grid scanning —
-  even at 6 players with the action list open.
-- Influence indicators: face-down cards are anonymous mini card-backs;
-  a lost card shows the **character's portrait** with a red ✗ badge.
+- The table IS a table: a green-felt, silver-rimmed rounded surface
+  with opponents **seated around the rim** (1–5 seats mapped to arc
+  anchors), the Court deck and event banner at its center, and your
+  hand at the bottom edge — a real card-table read.
+- Each seat: animal avatar with a fading turn-glow ring, a mini card
+  fan behind the head (face-down backs; lost cards show the character's
+  emblem in its color), name chip, coin count, response/dead badges.
 - The header deck chip opens the **deck tracker**: all 15 court cards
   as 5 roles × 3 pips — revealed (dead, ✗) vs still hidden — plus
   Court-deck and hidden-in-hands counts (public information only).
@@ -232,9 +234,10 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   its own tab appears while in a room, with an unread badge, quick
   emote row, and canned taunts. Emotes/taunts float over the sender's
   seat for ~3.5s. Offline bots emote occasionally after moves.
-- **Avatars**: each player picks one of the five character portraits on
-  the Home screen (persisted); shown in the lobby, seat rows, chat and
-  final standings. Offline bots get distinct portraits by seat.
+- **Avatars**: each player picks one of 12 animal faces (Kenney Animal
+  Pack, CC0) on the Home screen (persisted); shown in the lobby, table
+  seats, chat and final standings. Offline bots get distinct animals.
+  Legacy character-portrait avatars from old clients still render.
 - **Table music**: a quiet CC0 inn loop plays while in a room
   (settings toggle), alongside per-event sound effects.
 - Full Arabic + English; layout direction is applied manually per

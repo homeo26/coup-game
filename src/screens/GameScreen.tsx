@@ -31,6 +31,7 @@ import { InfluenceCard } from '../components/InfluenceCard';
 import { CoinCount, CoinIcon } from '../components/Coin';
 import { RoleArt } from '../components/RoleArt';
 import { RolePortrait } from '../components/RolePortrait';
+import { Avatar } from '../components/Avatar';
 import { Breathing } from '../components/Breathing';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useRoom } from '../net/RoomContext';
@@ -157,53 +158,6 @@ function logSound(key: string): sound.SoundKey | null {
 /* Opponent seat                                                       */
 /* ------------------------------------------------------------------ */
 
-/** Soft pulsing gold halo behind the active player's seat. Always
- *  mounted; presence fades in/out so the turn glides between seats. */
-function TurnGlow({ active }: { active: boolean }) {
-  const pulse = useSharedValue(0.35);
-  const presence = useSharedValue(active ? 1 : 0);
-  useEffect(() => {
-    pulse.value = withRepeat(withTiming(1, { duration: 1100 }), -1, true);
-  }, [pulse]);
-  useEffect(() => {
-    presence.value = withTiming(active ? 1 : 0, { duration: 550 });
-  }, [active, presence]);
-  const anim = useAnimatedStyle(() => ({ opacity: presence.value * pulse.value }));
-  return (
-    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, glowStyles.ring, anim]} />
-  );
-}
-
-const glowStyles = StyleSheet.create({
-  ring: {
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#d4a854',
-  },
-});
-
-/** Tiny influence indicator: face-down back, or the lost character's
- *  portrait with a strike — so who lost what reads at a glance. */
-function MiniCard({ role, revealed }: { role: Role; revealed: boolean }) {
-  const theme = useTheme();
-  const styles = useStyles(makeStyles);
-  if (!revealed) {
-    return (
-      <View style={styles.miniCard}>
-        <View style={styles.miniCardDot} />
-      </View>
-    );
-  }
-  return (
-    <Animated.View entering={FadeIn.duration(400)} style={styles.miniDeadWrap}>
-      <RolePortrait role={role} size={30} ring={1.5} />
-      <View style={styles.miniDeadX}>
-        <Ionicons name="close" size={10} color={theme.colors.danger} />
-      </View>
-    </Animated.View>
-  );
-}
-
 /** Coin count that pulses whenever the amount changes. */
 function AnimatedCoins({ amount, size }: { amount: number; size: number }) {
   const scale = useSharedValue(1);
@@ -230,7 +184,32 @@ function AnimatedCoins({ amount, size }: { amount: number; size: number }) {
  * name, influence cards, coins on the right. All opponents fit in a
  * single glance-friendly column — no grid to scan.
  */
-function SeatRow({
+/** Where seats sit around the table rim (fractions of the table box,
+ *  anchoring each seat's center) — mirrors a real round table. */
+const SEAT_ANCHORS: Record<number, { x: number; y: number }[]> = {
+  1: [{ x: 0.5, y: 0.02 }],
+  2: [{ x: 0.07, y: 0.38 }, { x: 0.93, y: 0.38 }],
+  3: [{ x: 0.07, y: 0.42 }, { x: 0.5, y: 0.02 }, { x: 0.93, y: 0.42 }],
+  4: [
+    { x: 0.06, y: 0.5 },
+    { x: 0.22, y: 0.07 },
+    { x: 0.78, y: 0.07 },
+    { x: 0.94, y: 0.5 },
+  ],
+  5: [
+    { x: 0.06, y: 0.52 },
+    { x: 0.16, y: 0.1 },
+    { x: 0.5, y: 0.02 },
+    { x: 0.84, y: 0.1 },
+    { x: 0.94, y: 0.52 },
+  ],
+};
+
+const SEAT_W = 104;
+
+/** A seat at the table: card fan behind the avatar, name and coins
+ *  below, turn glow around the face — like sitting at a real table. */
+function TableSeat({
   p,
   avatar,
   emote,
@@ -238,6 +217,7 @@ function SeatRow({
   responding,
   targetable,
   onTarget,
+  anchor,
 }: {
   p: PlayerState;
   avatar?: string;
@@ -246,10 +226,10 @@ function SeatRow({
   responding: boolean;
   targetable: boolean;
   onTarget: () => void;
+  anchor: { x: number; y: number };
 }) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
-  const rtl = isRTL();
   const dead = !isAlive(p);
 
   // A gentle scale nudge when the turn arrives at this seat
@@ -258,88 +238,98 @@ function SeatRow({
   useEffect(() => {
     if (isTurn && !wasTurn.current) {
       nudge.value = withSequence(
-        withTiming(1.03, { duration: 220 }),
+        withTiming(1.06, { duration: 220 }),
         withTiming(1, { duration: 320 }),
       );
     }
     wasTurn.current = isTurn;
   }, [isTurn, nudge]);
-  const nudgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: nudge.value }] }));
 
-  // Smooth turn hand-off: border tint eases in/out with the glow
+  // Smooth turn hand-off: a glow ring that fades between seats
   const turnSv = useSharedValue(isTurn ? 1 : 0);
   useEffect(() => {
     turnSv.value = withTiming(isTurn ? 1 : 0, { duration: 550 });
   }, [isTurn, turnSv]);
-  const baseBorder = theme.colors.border;
-  const goldBorder = theme.colors.gold;
-  const borderStyle = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(turnSv.value, [0, 1], [baseBorder, goldBorder]),
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: turnSv.value,
+    transform: [{ scale: nudge.value }],
   }));
+  const nudgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: nudge.value }] }));
 
   return (
-    <Animated.View style={nudgeStyle} layout={LinearTransition.duration(250)}>
-      <Animated.View
-        style={[
-          styles.seatShell,
-          !targetable && !dead && borderStyle,
-          targetable && { borderColor: theme.colors.danger },
-          dead && { borderColor: theme.colors.border },
-        ]}
-      >
-        <Pressy
-          scaleTo={0.97}
-          disabled={!targetable}
-          onPress={onTarget}
-          style={[styles.seatRow, rtl && styles.rowReverse, dead && styles.seatRowDead]}
-        >
-          <TurnGlow active={isTurn} />
-        <View style={styles.seatState}>
-          {targetable ? (
-            <Ionicons name="locate" size={17} color={theme.colors.danger} />
-          ) : dead ? (
-            <Ionicons name="skull-outline" size={15} color={theme.colors.inkFaint} />
-          ) : responding ? (
-            <Ionicons name="hourglass-outline" size={15} color={theme.colors.warning} />
-          ) : isTurn ? (
-            <Ionicons name="play" size={14} color={theme.colors.gold} />
-          ) : (
-            <View style={styles.seatIdleDot} />
-          )}
-        </View>
-        {avatar ? <RolePortrait role={avatar as Role} size={30} ring={1.5} /> : null}
-        <Text
-          style={[styles.seatRowName, rtl && styles.rtlText, dead && styles.seatRowNameDead]}
-          numberOfLines={1}
-        >
-          {p.name}
-        </Text>
-        <View style={[styles.seatRowCards, rtl && styles.rowReverse]}>
+    <View
+      style={[
+        styles.tableSeat,
+        {
+          left: `${anchor.x * 100}%`,
+          top: `${anchor.y * 100}%`,
+          marginLeft: -SEAT_W / 2,
+        },
+      ]}
+    >
+      <Pressy scaleTo={0.93} disabled={!targetable} onPress={onTarget} style={styles.seatInner}>
+        {/* card fan peeking from behind the avatar */}
+        <View style={styles.fan} pointerEvents="none">
           {p.cards.map((c, i) => (
-            <MiniCard key={i} role={c.role} revealed={c.revealed} />
+            <View
+              key={i}
+              style={[
+                styles.fanCard,
+                { transform: [{ rotate: `${i === 0 ? -16 : 16}deg` }, { translateY: -3 }] },
+                c.revealed && {
+                  backgroundColor: roleColors[c.role] + '33',
+                  borderColor: roleColors[c.role] + 'aa',
+                },
+              ]}
+            >
+              {c.revealed ? <RoleArt role={c.role} size={11} color={roleColors[c.role]} /> : null}
+            </View>
           ))}
         </View>
-        <View style={[styles.seatRowCoins, rtl && styles.rowReverse]}>
+        <Animated.View style={nudgeStyle}>
+          <View style={dead ? styles.seatDeadAvatar : undefined}>
+            <Avatar id={avatar} size={52} ring={2} />
+          </View>
+          {/* pulsing turn ring */}
+          <Animated.View pointerEvents="none" style={[styles.turnRing, ringStyle]} />
+          {targetable ? (
+            <View style={styles.targetRing}>
+              <Ionicons name="locate" size={15} color="#fff" />
+            </View>
+          ) : null}
           {dead ? (
-            <Text style={styles.deadLabel}>{t('eliminated')}</Text>
-          ) : (
-            <AnimatedCoins amount={p.coins} size={16} />
-          )}
+            <View style={styles.deadBadge}>
+              <Ionicons name="skull" size={13} color={theme.colors.inkFaint} />
+            </View>
+          ) : responding ? (
+            <View style={styles.respondBadge}>
+              <Ionicons name="hourglass" size={10} color={theme.colors.inkOnGold} />
+            </View>
+          ) : null}
+        </Animated.View>
+        <View style={[styles.seatNameChip, dead && { opacity: 0.6 }]}>
+          <Text style={styles.seatNameText} numberOfLines={1}>
+            {p.name}
+          </Text>
         </View>
-        </Pressy>
-      </Animated.View>
+        {dead ? (
+          <Text style={styles.deadLabel}>{t('eliminated')}</Text>
+        ) : (
+          <AnimatedCoins amount={p.coins} size={14} />
+        )}
+      </Pressy>
       {emote ? (
         <Animated.View
           key={emote}
           entering={FadeInDown.duration(250)}
           exiting={FadeOut.duration(300)}
           pointerEvents="none"
-          style={[styles.emoteBubble, rtl ? { left: 10 } : { right: 10 }]}
+          style={styles.emoteBubble}
         >
           <Text style={styles.emoteBubbleText}>{emote}</Text>
         </Animated.View>
       ) : null}
-    </Animated.View>
+    </View>
   );
 }
 
@@ -910,10 +900,53 @@ export function GameScreen() {
         <Ionicons name="chevron-up" size={13} color={theme.colors.inkFaint} />
       </Pressy>
 
-      {/* Opponents — one compact scoreboard row each, always all visible */}
-      <View style={styles.seatColumn}>
-        {opponents.map((p) => (
-          <SeatRow
+      {/* The table: green felt, silver rim, seats around the edge, the
+          Court and the event banner at its center — a real card table. */}
+      <View style={styles.tableArea}>
+        <View style={styles.tableRimOuter}>
+          <LinearGradient
+            colors={['#2e5c41', '#1f4630', '#173423']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={styles.felt}
+          >
+            {/* felt inner shade line */}
+            <View style={styles.feltInnerLine} pointerEvents="none" />
+            {/* table center: the Court + floating event banner */}
+            <View style={styles.tableCenter} pointerEvents="none">
+              <View style={styles.courtStack}>
+                {[2, 1, 0].map((i) => (
+                  <View key={i} style={[styles.courtCard, { top: -i * 3, left: i * 2 }]} />
+                ))}
+                <Text style={styles.courtCount}>{g.deck.length}</Text>
+              </View>
+              {banner && g.phase !== 'game_over' ? (
+                <Animated.View
+                  key={banner.key}
+                  entering={FadeInDown.duration(300)}
+                  exiting={FadeOut.duration(350)}
+                  style={[
+                    styles.bannerCard,
+                    rtl && styles.rowReverse,
+                    { borderColor: logMeta(banner.entry, theme).color + '77' },
+                  ]}
+                >
+                  <Ionicons
+                    name={logMeta(banner.entry, theme).icon}
+                    size={15}
+                    color={logMeta(banner.entry, theme).color}
+                  />
+                  <Text style={[styles.bannerText, rtl && styles.rtlText]} numberOfLines={2}>
+                    {formatLog(banner.entry)}
+                  </Text>
+                </Animated.View>
+              ) : null}
+            </View>
+          </LinearGradient>
+        </View>
+        {/* seats straddle the rim */}
+        {opponents.map((p, i) => (
+          <TableSeat
             key={p.id}
             p={p}
             avatar={avatarOf(p.id)}
@@ -921,6 +954,7 @@ export function GameScreen() {
             isTurn={current?.id === p.id && g.phase !== 'game_over'}
             responding={responders.includes(p.id)}
             targetable={targetable(p)}
+            anchor={SEAT_ANCHORS[opponents.length][i]}
             onTarget={() => {
               if (!targetable(p)) return;
               haptics.selection();
@@ -930,39 +964,11 @@ export function GameScreen() {
         ))}
       </View>
 
-      {/* The free table space between seats and my area hosts the
-          floating event banner — it can never cover a player row. */}
-      <View style={styles.tableSpace} pointerEvents="none">
-        {banner && g.phase !== 'game_over' ? (
-          <Animated.View
-            key={banner.key}
-            entering={FadeInDown.duration(300)}
-            exiting={FadeOut.duration(350)}
-            style={[
-              styles.bannerCard,
-              rtl && styles.rowReverse,
-              { borderColor: logMeta(banner.entry, theme).color + '77' },
-            ]}
-          >
-            <Ionicons
-              name={logMeta(banner.entry, theme).icon}
-              size={17}
-              color={logMeta(banner.entry, theme).color}
-            />
-            <Text style={[styles.bannerText, rtl && styles.rtlText]} numberOfLines={2}>
-              {formatLog(banner.entry)}
-            </Text>
-          </Animated.View>
-        ) : null}
-      </View>
-
       {/* My area */}
       <View style={styles.myArea}>
         <View style={[styles.myHead, rtl && styles.rowReverse]}>
           <View style={[styles.myIdent, rtl && styles.rowReverse]}>
-            {avatarOf(me.id) ? (
-              <RolePortrait role={avatarOf(me.id) as Role} size={26} ring={1.5} />
-            ) : null}
+            <Avatar id={avatarOf(me.id)} size={26} ring={1.5} />
             <Text style={styles.myName}>{me.name}</Text>
             {emotes.get(me.id) ? (
               <Animated.Text
@@ -1051,9 +1057,7 @@ export function GameScreen() {
                         </Text>
                       )}
                     </View>
-                    {avatarOf(p.id) ? (
-                      <RolePortrait role={avatarOf(p.id) as Role} size={26} ring={1.5} />
-                    ) : null}
+                    <Avatar id={avatarOf(p.id)} size={26} ring={1.5} />
                     <Text
                       style={[
                         styles.standingName,
@@ -1196,52 +1200,198 @@ const makeStyles = (theme: Theme) =>
       fontFamily: font('semibold'),
       color: theme.colors.inkSoft,
     },
-    seatColumn: {
-      paddingHorizontal: 16,
-      paddingTop: 10,
-      gap: 6,
+    tableArea: {
+      flex: 1,
+      marginHorizontal: 14,
+      marginTop: 30,
+      marginBottom: 6,
     },
-    seatShell: {
-      borderRadius: 14,
+    tableRimOuter: {
+      flex: 1,
+      borderRadius: 96,
+      backgroundColor: '#3a3f4a',
+      padding: 5,
+    },
+    felt: {
+      flex: 1,
+      borderRadius: 91,
+      borderWidth: 2,
+      borderColor: '#0f2418',
+      backgroundColor: '#1f4630',
+      overflow: 'hidden',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    feltInnerLine: {
+      position: 'absolute',
+      top: 14,
+      left: 14,
+      right: 14,
+      bottom: 14,
+      borderRadius: 80,
       borderWidth: 1.5,
-      borderColor: theme.colors.border,
+      borderColor: 'rgba(255,255,255,0.10)',
     },
-    seatRow: {
-      flexDirection: 'row',
+    tableCenter: {
       alignItems: 'center',
       gap: 10,
-      backgroundColor: theme.colors.surface,
-      borderRadius: 12.5,
-      paddingHorizontal: 12,
-      height: 48,
+      maxWidth: '72%',
     },
-    seatRowDead: {
-      opacity: 0.8,
+    courtStack: {
+      width: 44,
+      height: 58,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    seatState: {
-      width: 20,
+    courtCard: {
+      position: 'absolute',
+      width: 38,
+      height: 52,
+      borderRadius: 6,
+      backgroundColor: '#232733',
+      borderWidth: 1.5,
+      borderColor: theme.colors.goldDark,
+    },
+    courtCount: {
+      fontSize: 15,
+      fontFamily: latinFont('bold'),
+      color: theme.colors.goldLight,
+    },
+    tableSeat: {
+      position: 'absolute',
+      width: SEAT_W,
       alignItems: 'center',
     },
-    seatIdleDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: theme.colors.borderBright,
+    seatInner: {
+      alignItems: 'center',
+      gap: 3,
+    },
+    fan: {
+      position: 'absolute',
+      top: -12,
+      flexDirection: 'row',
+      gap: 14,
+      zIndex: -1,
+    },
+    fanCard: {
+      width: 24,
+      height: 33,
+      borderRadius: 4,
+      backgroundColor: '#232733',
+      borderWidth: 1.5,
+      borderColor: theme.colors.goldDark,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    turnRing: {
+      position: 'absolute',
+      top: -4,
+      left: -4,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      borderWidth: 2.5,
+      borderColor: theme.colors.gold,
+      ...theme.shadow.goldGlow,
+    },
+    targetRing: {
+      position: 'absolute',
+      top: -4,
+      left: -4,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      borderWidth: 2.5,
+      borderColor: theme.colors.danger,
+      backgroundColor: 'rgba(224, 82, 82, 0.25)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    seatDeadAvatar: {
+      opacity: 0.45,
+    },
+    deadBadge: {
+      position: 'absolute',
+      bottom: -2,
+      right: -2,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    respondBadge: {
+      position: 'absolute',
+      top: -3,
+      right: -3,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: theme.colors.warning,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    seatNameChip: {
+      backgroundColor: 'rgba(10, 12, 16, 0.82)',
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 9,
+      paddingVertical: 2,
+      maxWidth: SEAT_W,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.13)',
+    },
+    seatNameText: {
+      fontSize: 11,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+    },
+    deadLabel: {
+      fontSize: 9,
+      fontFamily: font('bold'),
+      color: theme.colors.danger,
+    },
+    logStripInner: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    bannerCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: 'rgba(14, 18, 15, 0.92)',
+      borderWidth: 1.5,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      maxWidth: '100%',
+      ...theme.shadow.card,
+    },
+    bannerText: {
+      fontSize: 12.5,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+      flexShrink: 1,
     },
     emoteBubble: {
       position: 'absolute',
-      top: -14,
+      top: -26,
       backgroundColor: theme.colors.surfaceElevated,
       borderWidth: 1.5,
       borderColor: theme.colors.goldDark,
       borderRadius: theme.radius.pill,
       paddingHorizontal: 10,
       paddingVertical: 3,
-      maxWidth: 220,
+      maxWidth: 200,
+      zIndex: 5,
       ...theme.shadow.card,
     },
     emoteBubbleText: {
-      fontSize: 17,
+      fontSize: 16,
       fontFamily: font('bold'),
       color: theme.colors.ink,
     },
@@ -1253,94 +1403,6 @@ const makeStyles = (theme: Theme) =>
     },
     myEmote: {
       fontSize: 17,
-    },
-    seatRowName: {
-      flex: 1,
-      fontSize: 14.5,
-      fontFamily: font('bold'),
-      color: theme.colors.ink,
-    },
-    seatRowNameDead: {
-      textDecorationLine: 'line-through',
-      color: theme.colors.inkFaint,
-    },
-    seatRowCards: {
-      flexDirection: 'row',
-      gap: 4,
-    },
-    seatRowCoins: {
-      minWidth: 52,
-      alignItems: 'flex-end',
-    },
-    miniCard: {
-      width: 20,
-      height: 27,
-      borderRadius: 4,
-      borderWidth: 1.5,
-      borderColor: theme.colors.borderBright,
-      backgroundColor: theme.colors.surfaceElevated,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    miniCardDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: theme.colors.goldDark,
-    },
-    miniDeadWrap: {
-      width: 30,
-      height: 30,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    miniDeadX: {
-      position: 'absolute',
-      bottom: -3,
-      right: -4,
-      width: 15,
-      height: 15,
-      borderRadius: 8,
-      backgroundColor: theme.colors.surfaceElevated,
-      borderWidth: 1,
-      borderColor: theme.colors.danger + '88',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    logStripInner: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    tableSpace: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 24,
-    },
-    bannerCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      backgroundColor: 'rgba(18, 20, 26, 0.94)',
-      borderWidth: 1.5,
-      borderRadius: theme.radius.md,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      maxWidth: '100%',
-      ...theme.shadow.card,
-    },
-    bannerText: {
-      fontSize: 13.5,
-      fontFamily: font('bold'),
-      color: theme.colors.ink,
-      flexShrink: 1,
-    },
-    deadLabel: {
-      fontSize: 10,
-      fontFamily: font('bold'),
-      color: theme.colors.danger,
     },
     trackerRow: {
       flexDirection: 'row',

@@ -606,6 +606,13 @@ function forfeit(s: GameState, playerId: string) {
   markEliminated(s, me);
   log(s, 'logForfeit', { a: me.name });
   s.lossQueue = s.lossQueue.filter((l) => l.playerId !== playerId);
+  // An exchange in flight holds cards drawn from the Court — return
+  // them, or the deck shrinks for the rest of the game.
+  if (s.pending?.drawn && s.pending.actor === playerId) {
+    s.deck.push(...s.pending.drawn);
+    s.deck = shuffle(s.deck);
+    s.pending.drawn = undefined;
+  }
   checkWin(s);
   if (s.phase === 'game_over') return;
 
@@ -617,8 +624,14 @@ function forfeit(s: GameState, playerId: string) {
   }
 
   if (p.actor === playerId) {
-    // Their own action dies with them
-    endTurn(s);
+    // Their own action dies with them — but losses already owed by
+    // OTHER players (e.g. a failed challenger) must still be paid.
+    if (s.lossQueue.length > 0) {
+      p.resume = 'end_turn';
+      afterLossProgress(s);
+    } else {
+      endTurn(s);
+    }
     return;
   }
   if (p.block && p.block.blocker === playerId && s.phase === 'block_challenge') {

@@ -47,7 +47,7 @@ async function join() {
     if (roster.some((p) => p.id === myId)) return;
     if (data.status !== 'lobby') throw new Error('already started');
     if (roster.length >= 6) throw new Error('full');
-    const avatars = ['duke', 'captain', 'contessa', 'assassin', 'ambassador'];
+    const avatars = ['monkey', 'penguin', 'frog', 'elephant', 'owl'];
     const avatar = avatars[roster.length % avatars.length];
     tx.update(ref, { roster: [...roster, { id: myId, name, avatar }], updatedAt: serverTimestamp() });
   });
@@ -83,7 +83,7 @@ async function main() {
       const snap = await tx.get(ref);
       if (!snap.exists()) throw new Error('room gone');
       const chat = [...((snap.data()?.chat as unknown[]) ?? [])];
-      chat.push({ u: myId, n: name, a: 'captain', k: 'text', v: moveJson ?? 'hi', ts: Date.now() });
+      chat.push({ u: myId, n: name, a: 'penguin', k: 'text', v: moveJson ?? 'hi', ts: Date.now() });
       tx.update(ref, { chat: chat.slice(-40), updatedAt: serverTimestamp() });
     });
     console.log(`[${name}] chat sent`);
@@ -94,7 +94,7 @@ async function main() {
       const snap = await tx.get(ref);
       if (!snap.exists()) throw new Error('room gone');
       const chat = [...((snap.data()?.chat as unknown[]) ?? [])];
-      chat.push({ u: myId, n: name, a: 'duke', k: 'emote', v: moveJson ?? '🔥', ts: Date.now() });
+      chat.push({ u: myId, n: name, a: 'monkey', k: 'emote', v: moveJson ?? '🔥', ts: Date.now() });
       tx.update(ref, { chat: chat.slice(-40), updatedAt: serverTimestamp() });
     });
     console.log(`[${name}] emote sent`);

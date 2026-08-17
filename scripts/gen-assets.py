@@ -104,11 +104,21 @@ def find_font(size):
 
 
 def make_logo():
-    """Transparent logo: coin above a spaced COUP wordmark."""
+    """Transparent logo: the game's own coin token above the wordmark
+    (no star — the in-game silver coin IS the brand mark)."""
     W, H = 1024, 1024
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    coin = draw_coin(560)
-    img.alpha_composite(coin, ((W - 560) // 2, 60))
+    token = Image.open(os.path.join(os.path.dirname(OUT), "assets", "coin.png")).convert("RGBA")
+    token = token.resize((560, 560), Image.LANCZOS)
+    # soft drop shadow so it sits on the dark backdrop
+    from PIL import ImageFilter
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    a = token.split()[3].point(lambda v: int(v * 0.5))
+    shim = Image.new("RGBA", token.size, (0, 0, 0, 255))
+    shim.putalpha(a)
+    sh.alpha_composite(shim, ((W - 560) // 2 + 10, 60 + 14))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(12)))
+    img.alpha_composite(token, ((W - 560) // 2, 60))
 
     d = ImageDraw.Draw(img)
     font = find_font(190)

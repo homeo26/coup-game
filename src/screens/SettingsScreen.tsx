@@ -5,6 +5,7 @@ import React from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Constants from 'expo-constants';
 import { Theme, font, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
 import { useSettings } from '../settings';
@@ -126,7 +127,7 @@ export function SettingsScreen() {
           <Text style={[styles.aboutText, rtlText]}>{t('aboutText')}</Text>
         </View>
 
-        <Text style={styles.version}>v1.0.0</Text>
+        <Text style={styles.version}>v{Constants.expoConfig?.version ?? '?'}</Text>
       </ScrollView>
     </SafeAreaView>
   );

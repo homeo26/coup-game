@@ -17,14 +17,14 @@ export interface Settings {
   playerName: string;
 }
 
-const ROLES = ['duke', 'assassin', 'captain', 'ambassador', 'contessa'];
+const ANIMALS = ['bear','panda','owl','penguin','monkey','elephant','frog','pig','rabbit','duck','gorilla','giraffe'];
 
 const DEFAULTS: Settings = {
   lang: getLang(),
   haptics: true,
   sounds: true,
   music: true,
-  avatar: ROLES[Math.floor(Math.random() * ROLES.length)],
+  avatar: ANIMALS[Math.floor(Math.random() * ANIMALS.length)],
   playerName: '',
 };
 

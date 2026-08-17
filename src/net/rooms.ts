@@ -210,6 +210,7 @@ export async function commitMove(code: string, move: Move): Promise<string | nul
     }
     tx.update(roomRef(code), {
       gameJson: JSON.stringify(result.state),
+      ...(result.state.phase === 'game_over' ? { finishedAtMs: Date.now() } : {}),
       updatedAt: serverTimestamp(),
     });
   });
@@ -261,17 +262,35 @@ export async function leaveRoom(code: string): Promise<void> {
 }
 
 /**
- * Best-effort sweep of rooms nobody bothered to leave: anything older
- * than 24h is fair game. Runs on room creation; failures are ignored
- * (another client may be sweeping the same doc).
+ * Best-effort garbage collection, run on every room creation. Two
+ * passes, both fire-and-forget (another client may be sweeping too):
+ * 1. Finished games: once a game has been over for 2h+, its doc —
+ *    chat, full game history, everything — is deleted.
+ * 2. Abandoned rooms: anything created 24h+ ago goes regardless.
+ * (The primary collector is still "last player to leave deletes".)
  */
 export async function sweepStaleRooms(): Promise<void> {
   try {
-    const cutoff = Date.now() - 24 * 3600 * 1000;
-    const stale = await getDocs(
-      query(collection(db, 'coup_rooms'), where('createdAtMs', '<', cutoff), limit(10)),
-    );
-    await Promise.all(stale.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+    const now = Date.now();
+    const [finished, stale] = await Promise.all([
+      getDocs(
+        query(
+          collection(db, 'coup_rooms'),
+          where('finishedAtMs', '<', now - 2 * 3600 * 1000),
+          limit(10),
+        ),
+      ),
+      getDocs(
+        query(collection(db, 'coup_rooms'), where('createdAtMs', '<', now - 24 * 3600 * 1000), limit(10)),
+      ),
+    ]);
+    const seen = new Set<string>();
+    const docs = [...finished.docs, ...stale.docs].filter((d) => {
+      if (seen.has(d.id)) return false;
+      seen.add(d.id);
+      return true;
+    });
+    await Promise.all(docs.map((d) => deleteDoc(d.ref).catch(() => {})));
   } catch {
     // listing may be racing another sweep — never block room creation
   }
@@ -291,6 +310,8 @@ export async function playAgain(code: string): Promise<void> {
     tx.update(roomRef(code), {
       gameJson: JSON.stringify(game),
       left: [],
+      chat: [],
+      finishedAtMs: null,
       updatedAt: serverTimestamp(),
     });
   });

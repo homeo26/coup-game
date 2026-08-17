@@ -505,6 +505,40 @@ test('pre-standings saves migrate (eliminated defaults to [])', () => {
   eq(s.eliminated, [], 'field restored');
 });
 
+test('forfeit mid-exchange returns drawn cards to the Court', () => {
+  let s = rig(
+    { a: ['ambassador', 'duke'], b: ['captain', 'captain'], c: ['contessa', 'contessa'] },
+    ['assassin', 'assassin', 'duke'],
+  );
+  const before = 3 + 6; // deck + all hidden hands
+  s = mv(s, 'a', { type: 'declare', action: 'exchange' });
+  s = mv(s, 'b', { type: 'pass' });
+  s = mv(s, 'c', { type: 'pass' });
+  eq(s.phase, 'exchange', 'exchange window open');
+  eq(s.deck.length, 1, 'two cards drawn out');
+  s = mv(s, 'a', { type: 'forfeit' });
+  const after =
+    s.deck.length + s.players.reduce((n, p) => n + p.cards.filter((c) => !c.revealed).length, 0);
+  eq(s.deck.length, 3, 'drawn cards returned to the deck');
+  eq(after, before - 2, 'total hidden cards only dropped by the forfeited hand');
+});
+
+test("actor forfeit still collects the failed challenger's loss", () => {
+  let s = rig(
+    { a: ['duke', 'duke'], b: ['captain', 'captain'], c: ['contessa', 'contessa'] },
+    ['ambassador'],
+  );
+  s = mv(s, 'a', { type: 'declare', action: 'tax' });
+  s = mv(s, 'b', { type: 'challenge' }); // a proves the Duke → b owes a card
+  eq(s.phase, 'lose_card', 'b picking a card to lose');
+  s = mv(s, 'a', { type: 'forfeit' }); // actor walks away mid-collection
+  eq(s.phase, 'lose_card', 'b still owes their pick');
+  s = mv(s, 'b', { type: 'lose', cardIndex: 0 });
+  eq(influence(P(s, 'b')), 1, 'b still paid the failed challenge');
+  eq(s.phase, 'action', 'game moved on');
+  assert(isAlive(P(s, 'b')) && isAlive(P(s, 'c')), 'b and c continue');
+});
+
 /* ------------------------------------------------------------------ */
 
 console.log(`\n${passed} assertions passed, ${failed} failed`);
