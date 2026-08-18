@@ -194,7 +194,6 @@ const makeStyles = (theme: Theme) =>
     emptyChat: {
       padding: 30,
       alignItems: 'center',
-      transform: [{ scaleY: -1 }], // inverted list flips children
     },
     emptyText: {
       fontSize: 13.5,

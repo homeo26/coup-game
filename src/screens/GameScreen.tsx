@@ -216,9 +216,9 @@ function AnimatedCoins({
 /** Where seats sit around the table rim (fractions of the table box,
  *  anchoring each seat's center) — mirrors a real round table. */
 const SEAT_ANCHORS: Record<number, { x: number; y: number }[]> = {
-  1: [{ x: 0.5, y: 0.02 }],
+  1: [{ x: 0.5, y: -0.04 }],
   2: [{ x: 0.13, y: 0.38 }, { x: 0.87, y: 0.38 }],
-  3: [{ x: 0.13, y: 0.42 }, { x: 0.5, y: 0.02 }, { x: 0.87, y: 0.42 }],
+  3: [{ x: 0.13, y: 0.42 }, { x: 0.5, y: -0.04 }, { x: 0.87, y: 0.42 }],
   4: [
     { x: 0.12, y: 0.5 },
     { x: 0.26, y: 0.07 },
@@ -227,9 +227,9 @@ const SEAT_ANCHORS: Record<number, { x: number; y: number }[]> = {
   ],
   5: [
     { x: 0.12, y: 0.52 },
-    { x: 0.22, y: 0.1 },
-    { x: 0.5, y: 0.02 },
-    { x: 0.78, y: 0.1 },
+    { x: 0.22, y: 0.06 },
+    { x: 0.5, y: -0.04 },
+    { x: 0.78, y: 0.06 },
     { x: 0.88, y: 0.52 },
   ],
 };
@@ -247,7 +247,9 @@ function TableSeat({
   targetable,
   onTarget,
   anchor,
+  anchorBottom,
   showFaces,
+  compact,
 }: {
   p: PlayerState;
   avatar?: string;
@@ -257,12 +259,19 @@ function TableSeat({
   targetable: boolean;
   onTarget: () => void;
   anchor: { x: number; y: number };
+  /** Anchor from the felt's bottom edge instead of the top (0..1). */
+  anchorBottom?: number;
   /** Render this seat's hidden cards face-up (the player's own seat). */
   showFaces?: boolean;
+  /** Shrink the seat (used while the action sheet squeezes the table). */
+  compact?: boolean;
 }) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
   const dead = !isAlive(p);
+  const AV = compact ? 44 : 58;      // avatar size
+  const CARD = compact ? 34 : 44;    // fan card width
+  const COIN = compact ? 14 : 18;    // coin glyph size
 
   // A gentle scale nudge when the turn arrives at this seat
   const nudge = useSharedValue(1);
@@ -302,11 +311,17 @@ function TableSeat({
     <View
       style={[
         styles.tableSeat,
-        {
-          left: `${anchor.x * 100}%`,
-          top: `${anchor.y * 100}%`,
-          marginLeft: -SEAT_W / 2,
-        },
+        anchorBottom !== undefined
+          ? {
+              left: `${anchor.x * 100}%`,
+              bottom: `${anchorBottom * 100}%`,
+              marginLeft: -SEAT_W / 2,
+            }
+          : {
+              left: `${anchor.x * 100}%`,
+              top: `${anchor.y * 100}%`,
+              marginLeft: -SEAT_W / 2,
+            },
       ]}
     >
       <Pressy
@@ -328,7 +343,7 @@ function TableSeat({
                   transform: [{ rotate: `${i === 0 ? -15 : 15}deg` }, { translateY: -14 }],
                 }}
               >
-                <InfluenceCard role={c.role} dead={c.revealed} width={44} />
+                <InfluenceCard role={c.role} dead={c.revealed} width={CARD} />
               </Animated.View>
             ) : (
               <View
@@ -349,12 +364,24 @@ function TableSeat({
         </View>
         <Animated.View style={nudgeStyle}>
           <View style={dead ? styles.seatDeadAvatar : undefined}>
-            <Avatar id={avatar} size={58} ring={2.5} />
+            <Avatar id={avatar} size={AV} ring={2.5} />
           </View>
           {/* pulsing turn ring */}
-          <Animated.View pointerEvents="none" style={[styles.turnRing, ringStyle]} />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.turnRing,
+              { width: AV + 8, height: AV + 8, borderRadius: (AV + 8) / 2 },
+              ringStyle,
+            ]}
+          />
           {targetable ? (
-            <View style={styles.targetRing}>
+            <View
+              style={[
+                styles.targetRing,
+                { width: AV + 8, height: AV + 8, borderRadius: (AV + 8) / 2 },
+              ]}
+            >
               <Ionicons name="locate" size={15} color="#fff" />
             </View>
           ) : null}
@@ -404,19 +431,23 @@ function TableSeat({
 function FlyingCard({
   from,
   to,
+  delay = 0,
+  duration = 520,
 }: {
   from: { x: number; y: number };
   to: { x: number; y: number };
+  delay?: number;
+  duration?: number;
 }) {
   const styles = useStyles(makeStyles);
   const t = useSharedValue(0);
   useEffect(() => {
-    t.value = withTiming(1, { duration: 520, easing: Easing.inOut(Easing.cubic) });
-  }, [t]);
+    t.value = withDelay(delay, withTiming(1, { duration, easing: Easing.inOut(Easing.cubic) }));
+  }, [t, delay, duration]);
   const st = useAnimatedStyle(() => ({
     left: from.x + (to.x - from.x) * t.value,
     top: from.y + (to.y - from.y) * t.value - Math.sin(t.value * Math.PI) * 40,
-    opacity: 1 - Math.max(0, t.value - 0.75) * 4,
+    opacity: t.value === 0 ? 0 : 1 - Math.max(0, t.value - 0.8) * 5,
     transform: [{ rotate: `${t.value * 200}deg` }, { scale: 1 - 0.3 * t.value }],
   }));
   return (
@@ -555,6 +586,9 @@ export function GameScreen() {
   const [myAreaH, setMyAreaH] = useState(0);
   const [tableBox, setTableBox] = useState({ w: 0, h: 0 });
   const [fly, setFly] = useState<{ key: number; from: { x: number; y: number } } | null>(null);
+  const [deals, setDeals] = useState<
+    { key: string; to: { x: number; y: number }; delay: number }[]
+  >([]);
   const [banner, setBanner] = useState<{ entry: LogEntry; key: number } | null>(null);
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   void lang;
@@ -612,15 +646,34 @@ export function GameScreen() {
     setKeepIdxs([]);
   }, [g?.version]);
 
-  // A fresh game opens with the shuffle of a new Court deck.
+  // A fresh game opens with a shuffle and a deal: two cards sail from
+  // the Court to every seat around the table.
   const dealtFor = useRef<number>(-1);
   useEffect(() => {
-    if (g && g.version === 0 && dealtFor.current !== 0 && g.phase !== 'game_over') {
+    if (g && g.version === 0 && dealtFor.current !== 0 && g.phase !== 'game_over' && tableBox.w > 0) {
       dealtFor.current = 0;
       sound.play('shuffle');
+      const opp = g.players.filter((pl) => pl.id !== myId);
+      const seats: { x: number; y: number }[] = opp.map(
+        (_, i) => SEAT_ANCHORS[opp.length]?.[i] ?? { x: 0.5, y: 0.1 },
+      );
+      const targets = [
+        ...seats.map((a) => ({ x: a.x * tableBox.w - 17, y: a.y * tableBox.h + 30 })),
+        { x: 0.5 * tableBox.w - 17, y: tableBox.h * 0.78 }, // me, bottom rim
+      ];
+      const round: { key: string; to: { x: number; y: number }; delay: number }[] = [];
+      for (let pass = 0; pass < 2; pass++) {
+        targets.forEach((to, i) => {
+          round.push({ key: `d${pass}-${i}`, to, delay: (pass * targets.length + i) * 130 });
+        });
+      }
+      setDeals(round);
+      const total = round.length * 130 + 500;
+      setTimeout(() => setDeals([]), total);
+      round.forEach((_, i) => setTimeout(() => sound.play('card'), i * 130));
     }
     if (g && g.version > 0) dealtFor.current = g.version;
-  }, [g]);
+  }, [g, myId, tableBox]);
 
   // Every new game event floats an animated banner over the table, so
   // mid-game actions are impossible to miss.
@@ -1152,6 +1205,7 @@ export function GameScreen() {
             responding={responders.includes(p.id)}
             targetable={targetable(p)}
             anchor={SEAT_ANCHORS[opponents.length][i]}
+            compact={needsMe && g.phase !== 'game_over'}
             onTarget={() => {
               if (!targetable(p)) return;
               haptics.selection();
@@ -1159,6 +1213,15 @@ export function GameScreen() {
             }}
           />
           </Animated.View>
+        ))}
+        {deals.map((d) => (
+          <FlyingCard
+            key={d.key}
+            from={{ x: tableBox.w * 0.5 - 17, y: tableBox.h * 0.36 }}
+            to={d.to}
+            delay={d.delay}
+            duration={430}
+          />
         ))}
         {fly ? (
           <FlyingCard
@@ -1178,6 +1241,8 @@ export function GameScreen() {
           targetable={false}
           onTarget={() => {}}
           anchor={{ x: 0.5, y: 0.70 }}
+          anchorBottom={0.05}
+          compact={needsMe && g.phase !== 'game_over'}
           showFaces
         />
       </Animated.View>
@@ -1442,8 +1507,6 @@ const makeStyles = (theme: Theme) =>
       overflow: 'hidden',
       alignItems: 'center',
       justifyContent: 'center',
-      // keeps the Court/discards in the upper half, clear of my seat
-      paddingBottom: '26%',
     },
     feltInnerLine: {
       position: 'absolute',
@@ -1456,9 +1519,12 @@ const makeStyles = (theme: Theme) =>
       borderColor: 'rgba(255,255,255,0.10)',
     },
     tableCenter: {
+      position: 'absolute',
+      top: '34%',
+      left: 0,
+      right: 0,
       alignItems: 'center',
       gap: 10,
-      maxWidth: '72%',
     },
     flyingCard: {
       position: 'absolute',
