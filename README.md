@@ -4,17 +4,19 @@ A React Native mobile adaptation of the bluffing card game **Coup** for
 playing with friends — each player installs the app on their own device
 and everyone joins the same room with a 4-letter code. 2–6 players.
 
-Arabic + English, dystopian dark & gold theme, vector character art.
+Arabic + English. A felt card table with animal avatars, illustrated
+cyborg cards, a neon home screen lit by the five characters' colours, and
+voiced characters that announce their own actions.
 
 ## Screenshots
 
-| Home | Lobby | Game table | Deck tracker |
+| Home | The table | Deck tracker | Table chat |
 |:---:|:---:|:---:|:---:|
-| ![Home](docs/screenshots/home.png) | ![Lobby](docs/screenshots/lobby.png) | ![Game table](docs/screenshots/table.png) | ![Deck tracker](docs/screenshots/tracker.png) |
+| ![Home](docs/screenshots/home.png) | ![The table](docs/screenshots/table.png) | ![Deck tracker](docs/screenshots/tracker.png) | ![Table chat](docs/screenshots/chat.png) |
 
-| Game history | Final standings | العربية |
-|:---:|:---:|:---:|
-| ![History](docs/screenshots/history.png) | ![Standings](docs/screenshots/standings.png) | ![Arabic](docs/screenshots/arabic.png) |
+| Lobby | Game history | Final standings | العربية |
+|:---:|:---:|:---:|:---:|
+| ![Lobby](docs/screenshots/lobby.png) | ![History](docs/screenshots/history.png) | ![Standings](docs/screenshots/standings.png) | ![Arabic](docs/screenshots/arabic.png) |
 
 ## How multiplayer works
 
@@ -46,8 +48,15 @@ room doc, and every room creation sweeps rooms older than 24 hours —
 no server-side garbage collector needed.
 
 **Offline mode**: play against 1–5 bots with no connection at all — the
-same engine runs in-memory and a shared bot policy (`src/ai.ts`) plays
-every action, block, challenge and bluff.
+same engine runs in-memory and a shared bot policy (`src/ai.ts`) gives
+each bot a personality: they hold grudges, gang up on the leader, bluff,
+count the cards they can see, and take a moment to think before acting.
+
+**At the table**: everyone sits around a felt table — animal avatar,
+coins, and a card fan; your own two cards face up in front of you. Dead
+cards collect in solitaire-style piles per character, cards are dealt
+from the Court with an animation, the active seat's ring breathes, and
+each character announces its action in its own voice.
 
 ## The rules engine
 
