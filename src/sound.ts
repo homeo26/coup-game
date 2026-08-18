@@ -45,8 +45,55 @@ export const ROLE_VOICE: Record<string, SoundKey> = {
 
 export type SoundKey = keyof typeof SOURCES;
 
-const players = new Map<SoundKey, AudioPlayer>();
+/**
+ * Two players per cue, used round-robin: a cue can retrigger while the
+ * previous instance is still finishing (rapid coins, dealing), and a
+ * player that has ended never blocks the next play.
+ */
+const pools = new Map<SoundKey, { players: AudioPlayer[]; next: number }>();
 let audioModeSet = false;
+
+function makePlayer(key: SoundKey): AudioPlayer {
+  const p = createAudioPlayer(SOURCES[key]);
+  p.volume = 0.85;
+  return p;
+}
+
+function pool(key: SoundKey) {
+  let entry = pools.get(key);
+  if (!entry) {
+    entry = { players: [makePlayer(key), makePlayer(key)], next: 0 };
+    pools.set(key, entry);
+  }
+  return entry;
+}
+
+/** Start a player from the beginning, retrying if the device swallows it. */
+function fire(key: SoundKey, p: AudioPlayer, attempt = 0) {
+  try {
+    try {
+      p.seekTo(0);
+    } catch {}
+    p.volume = 0.85;
+    p.play();
+    setTimeout(() => {
+      try {
+        if (p.playing) return;
+        if (attempt === 0) {
+          // second chance once the source has had time to load
+          fire(key, p, 1);
+        } else {
+          // give up on this instance and rebuild the pool for next time
+          pools.delete(key);
+        }
+      } catch {
+        pools.delete(key);
+      }
+    }, 110);
+  } catch {
+    pools.delete(key);
+  }
+}
 
 export function ensureAudioMode() {
   if (audioModeSet) return;
@@ -73,13 +120,10 @@ export function warmup() {
   try {
     ensureAudioMode();
     (Object.keys(SOURCES) as SoundKey[]).forEach((key) => {
-      if (players.has(key)) return;
       try {
-        const p = createAudioPlayer(SOURCES[key]);
-        p.volume = 0.8;
-        players.set(key, p);
+        pool(key);
       } catch {
-        // skip this cue; play() will retry creating it on demand
+        // skip this cue; play() will build it on demand
       }
     });
   } catch {}
@@ -89,29 +133,11 @@ export function play(key: SoundKey) {
   if (!getSettings().sounds) return;
   try {
     ensureAudioMode();
-    let p = players.get(key);
-    if (!p) {
-      p = createAudioPlayer(SOURCES[key]);
-      p.volume = 0.8;
-      players.set(key, p);
-      p.play();
-      // Some devices swallow the very first play while the source is
-      // still loading — nudge it once more shortly after.
-      const fresh = p;
-      setTimeout(() => {
-        try {
-          if (!fresh.playing) fresh.play();
-        } catch {}
-      }, 120);
-      return;
-    }
-    // Replaying: rewind defensively (some devices reject seek pre-load)
-    try {
-      p.seekTo(0);
-    } catch {}
-    p.play();
+    const entry = pool(key);
+    const p = entry.players[entry.next % entry.players.length];
+    entry.next += 1;
+    fire(key, p);
   } catch {
-    // A broken player must never break the game — drop and rebuild next time.
-    players.delete(key);
+    pools.delete(key);
   }
 }

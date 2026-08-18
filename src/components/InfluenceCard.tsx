@@ -145,15 +145,17 @@ const makeStyles = (theme: Theme) =>
       ...theme.shadow.goldGlow,
     },
     dead: {
-      opacity: 0.45,
+      // killed cards stay clearly readable — they are public information
+      opacity: 0.88,
     },
     strike: {
       position: 'absolute',
       left: '-12%',
       right: '-12%',
       top: '50%',
-      height: 3,
+      height: 4,
       backgroundColor: theme.colors.danger,
+      opacity: 0.95,
       transform: [{ rotateZ: '-32deg' }],
     },
   });

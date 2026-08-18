@@ -8,11 +8,19 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 TMP=$(mktemp -d)
 
-say -v Daniel   -r 165 -o "$TMP/duke.aiff"       "The Duke takes three coins."
-say -v Ralph    -r 175 -o "$TMP/captain.aiff"    "The Captain steals two coins!"
-say -v Rishi    -r 170 -o "$TMP/ambassador.aiff" "The Ambassador exchanges with the Court."
-say -v Tessa    -r 155 -o "$TMP/assassin.aiff"   "The Assassin strikes. Lose one influence."
-say -v Samantha -r 165 -o "$TMP/contessa.aiff"   "The Contessa blocks the assassination."
+# [[pbas]] pitch base, [[pmod]] pitch modulation (expressiveness),
+# [[volm]] volume, [[rate]] words per minute — this is what makes the
+# delivery theatrical instead of flat.
+say -v Daniel -o "$TMP/duke.aiff" \
+  "[[pbas 34]][[pmod 70]][[volm 1.0]][[rate 150]]The Duke [[emph +]]takes [[rate 140]]three coins."
+say -v Ralph -o "$TMP/captain.aiff" \
+  "[[pbas 46]][[pmod 85]][[volm 1.0]][[rate 200]]The Captain [[emph +]]steals two coins!"
+say -v Rishi -o "$TMP/ambassador.aiff" \
+  "[[pbas 44]][[pmod 72]][[volm 1.0]][[rate 178]]The Ambassador [[emph +]]exchanges with the Court."
+say -v Tessa -o "$TMP/assassin.aiff" \
+  "[[pbas 30]][[pmod 60]][[volm 0.9]][[rate 140]]The Assassin [[emph +]]strikes. [[slnc 120]][[rate 150]]Lose one influence."
+say -v Samantha -o "$TMP/contessa.aiff" \
+  "[[pbas 54]][[pmod 90]][[volm 1.0]][[rate 180]]The Contessa [[emph +]]blocks the assassination!"
 
 mkdir -p assets/sounds/roles
 process() { # role pitch extra_filters
@@ -28,11 +36,12 @@ loudnorm=I=-17:TP=-1.5" \
   echo "  $role -> assets/sounds/roles/$role.m4a"
 }
 
-process duke       0.94 "aecho=0.75:0.55:55:0.28,treble=g=-2"
-process captain    0.92 "aecho=0.6:0.4:22:0.16,treble=g=3"
-process ambassador 1.0  "aecho=0.5:0.3:34:0.12,bass=g=2"
-process assassin   0.95 "volume=0.9,highpass=f=170,aecho=0.7:0.55:110:0.4"
-process contessa   1.03 "aecho=0.5:0.3:40:0.16,treble=g=2"
+PUNCH="acompressor=threshold=-18dB:ratio=4:attack=6:release=140:makeup=3"
+process duke       0.95 "$PUNCH,aecho=0.8:0.6:58:0.3,bass=g=3,treble=g=-1"
+process captain    0.93 "$PUNCH,aecho=0.62:0.42:20:0.18,treble=g=4"
+process ambassador 1.0  "$PUNCH,aecho=0.5:0.3:34:0.12,bass=g=2,treble=g=1"
+process assassin   0.96 "$PUNCH,highpass=f=160,aecho=0.72:0.58:115:0.42,treble=g=1"
+process contessa   1.04 "$PUNCH,aecho=0.52:0.32:40:0.18,treble=g=3"
 
 rm -rf "$TMP"
 echo "voice stingers regenerated"

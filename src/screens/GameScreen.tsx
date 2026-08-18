@@ -1636,7 +1636,7 @@ const makeStyles = (theme: Theme) =>
       justifyContent: 'center',
     },
     seatDeadAvatar: {
-      opacity: 0.62,
+      opacity: 0.8,
     },
     deadBadge: {
       position: 'absolute',

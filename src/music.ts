@@ -6,7 +6,12 @@
 import { AudioPlayer, createAudioPlayer } from 'expo-audio';
 import { ensureAudioMode } from './sound';
 
-let player: AudioPlayer | null = null;
+/**
+ * The player lives on a global so a module re-evaluation (Fast Refresh,
+ * or any double import) can't leave a second loop playing underneath.
+ */
+const g = globalThis as unknown as { __coupMusic?: AudioPlayer | null };
+let player: AudioPlayer | null = g.__coupMusic ?? null;
 
 export function start() {
   try {
@@ -15,6 +20,7 @@ export function start() {
       player = createAudioPlayer(require('../assets/sounds/music-loop.m4a'));
       player.loop = true;
       player.volume = 0.55;
+      g.__coupMusic = player;
     }
     if (!player.playing) {
       player.play();
