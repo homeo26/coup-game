@@ -1,13 +1,14 @@
 /**
  * InfluenceCard — a proper playing card.
  *
- * Face: role-tinted gradient frame, corner emblem pip, oval portrait,
- * name plate. Back: dark court back with the star seal. A card that
+ * Face: cyber-circuit underlay, role-tinted gradient frame, corner
+ * emblem pip, oval portrait, name plate. Back: circuit-filigree court
+ * back with the mechanical-eye seal (scripts/gen-cards.py). A card that
  * flips from hidden to revealed plays a half-flip (turn-over) motion;
  * lost cards render dimmed with a strike.
  */
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   interpolate,
@@ -15,7 +16,6 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, Polygon } from 'react-native-svg';
 import { Role } from '../engine/types';
 import { RoleArt } from './RoleArt';
 import { RolePortrait } from './RolePortrait';
@@ -32,16 +32,6 @@ interface Props {
   selected?: boolean;
   /** Slight rotation for a fanned-hand feel (degrees). */
   tilt?: number;
-}
-
-function starPoints(cx: number, cy: number, rOut: number, rIn: number): string {
-  const pts: string[] = [];
-  for (let i = 0; i < 10; i++) {
-    const r = i % 2 === 0 ? rOut : rIn;
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    pts.push(`${cx + Math.cos(a) * r},${cy + Math.sin(a) * r}`);
-  }
-  return pts.join(' ');
 }
 
 export function InfluenceCard({ role, dead, width = 96, selected, tilt = 0 }: Props) {
@@ -88,12 +78,18 @@ export function InfluenceCard({ role, dead, width = 96, selected, tilt = 0 }: Pr
       ]}
     >
       {faceUp && role ? (
-        <LinearGradient
-          colors={[rc + '30', 'transparent', rc + '1c']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.face}
-        >
+        <View style={styles.face}>
+          <Image
+            source={require('../../assets/cards/face.png')}
+            style={{ position: 'absolute', width, height }}
+            resizeMode="cover"
+          />
+          <LinearGradient
+            colors={[rc + '30', 'transparent', rc + '1c']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
           {/* inner frame like a printed card */}
           <View style={[styles.frame, { borderColor: rc + '55' }]} />
           {/* corner pip */}
@@ -112,23 +108,13 @@ export function InfluenceCard({ role, dead, width = 96, selected, tilt = 0 }: Pr
             </Text>
           </View>
           {dead ? <View style={styles.strike} /> : null}
-        </LinearGradient>
+        </View>
       ) : (
-        <LinearGradient
-          colors={['#1c2028', '#14171d']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.face}
-        >
-          <View style={[styles.frame, { borderColor: 'rgba(200,210,230,0.14)' }]} />
-          <View style={styles.backWrap}>
-            <Svg width={width * 0.46} height={width * 0.46} viewBox="0 0 48 48">
-              <Circle cx={24} cy={24} r={21} stroke="#59606e" strokeWidth={2.5} fill="none" />
-              <Circle cx={24} cy={24} r={16} stroke="#59606e55" strokeWidth={1.5} fill="none" />
-              <Polygon points={starPoints(24, 24, 11, 4.7)} fill="#59606e" />
-            </Svg>
-          </View>
-        </LinearGradient>
+        <Image
+          source={require('../../assets/cards/back.png')}
+          style={{ width, height }}
+          resizeMode="cover"
+        />
       )}
     </Animated.View>
   );
@@ -196,10 +182,5 @@ const makeStyles = (theme: Theme) =>
       height: 3,
       backgroundColor: theme.colors.danger,
       transform: [{ rotateZ: '-32deg' }],
-    },
-    backWrap: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
   });

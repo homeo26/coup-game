@@ -8,7 +8,16 @@
  * overlay at game end. Everything animates with short fades/springs.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import {
+  FlatList,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -320,7 +329,13 @@ function TableSeat({
                   styles.fanCard,
                   { transform: [{ rotate: `${i === 0 ? -16 : 16}deg` }, { translateY: -3 }] },
                 ]}
-              />
+              >
+                <Image
+                  source={require('../../assets/cards/back.png')}
+                  style={{ width: 21, height: 30 }}
+                  resizeMode="cover"
+                />
+              </View>
             ),
           )}
         </View>
@@ -398,7 +413,13 @@ function FlyingCard({
   }));
   return (
     <Animated.View pointerEvents="none" style={[styles.flyingCard, st]}>
-      <View style={styles.flyingCardFace} />
+      <View style={styles.flyingCardFace}>
+        <Image
+          source={require('../../assets/cards/back.png')}
+          style={{ width: 31, height: 45 }}
+          resizeMode="cover"
+        />
+      </View>
     </Animated.View>
   );
 }
@@ -1064,7 +1085,13 @@ export function GameScreen() {
               <View style={styles.centerRow}>
                 <View style={styles.courtStack}>
                   {[2, 1, 0].map((i) => (
-                    <View key={i} style={[styles.courtCard, { top: -i * 3, left: i * 2 }]} />
+                    <View key={i} style={[styles.courtCard, { top: -i * 3, left: i * 2 }]}>
+                      <Image
+                        source={require('../../assets/cards/back.png')}
+                        style={{ width: 35, height: 49 }}
+                        resizeMode="cover"
+                      />
+                    </View>
                   ))}
                   <Text style={styles.courtCount}>{g.deck.length}</Text>
                 </View>
@@ -1421,6 +1448,7 @@ const makeStyles = (theme: Theme) =>
       zIndex: 30,
     },
     flyingCardFace: {
+      overflow: 'hidden',
       width: 34,
       height: 48,
       borderRadius: 5,
@@ -1446,6 +1474,7 @@ const makeStyles = (theme: Theme) =>
     },
     courtCard: {
       position: 'absolute',
+      overflow: 'hidden',
       width: 38,
       height: 52,
       borderRadius: 6,
@@ -1475,6 +1504,7 @@ const makeStyles = (theme: Theme) =>
       zIndex: -1,
     },
     fanCard: {
+      overflow: 'hidden',
       width: 24,
       height: 33,
       borderRadius: 4,
