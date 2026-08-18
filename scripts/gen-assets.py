@@ -12,10 +12,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 OUT = os.path.join(os.path.dirname(__file__), "..", "assets")
 os.makedirs(OUT, exist_ok=True)
 
-BG = (14, 16, 20, 255)          # #0e1014 cool near-black
-GOLD = (201, 204, 212)           # main gold
-GOLD_DARK = (125, 130, 142)
-GOLD_LIGHT = (233, 235, 240)
+BG = (8, 11, 17, 255)           # #080b11 cyborg near-black
+GOLD = (34, 211, 238)            # neon cyan accent
+GOLD_DARK = (14, 116, 144)
+GOLD_LIGHT = (126, 240, 255)
 INK = (18, 20, 26)
 
 

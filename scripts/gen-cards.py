@@ -11,10 +11,11 @@ OUT = os.path.join(os.path.dirname(__file__), "..", "assets", "cards")
 os.makedirs(OUT, exist_ok=True)
 
 W, H = 704, 1000
-STEEL = (120, 150, 190)
-STEEL_BRIGHT = (170, 200, 235)
-SILVER = (201, 204, 212)
-BG = (13, 15, 20)
+# neon-cyborg palette: cyan circuitry on chrome
+STEEL = (34, 170, 200)
+STEEL_BRIGHT = (126, 240, 255)
+SILVER = (150, 210, 230)
+BG = (8, 11, 17)
 
 
 def circuit_layer(seed, n_traces, box, thickness=3, pad_r=5):

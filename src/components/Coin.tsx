@@ -61,7 +61,7 @@ const makeStyles = (theme: Theme) =>
     chip: {
       borderRadius: theme.radius.pill,
       borderWidth: 1,
-      borderColor: 'rgba(233,235,240,0.28)',
+      borderColor: 'rgba(34, 211, 238, 0.6)',
       paddingHorizontal: 7,
       paddingVertical: 1,
       gap: 4,
@@ -75,6 +75,9 @@ const makeStyles = (theme: Theme) =>
       textShadowRadius: 3,
     },
     amountChip: {
-      color: '#ffffff',
+      color: '#7ef0ff',
+      textShadowColor: '#22d3ee',
+      textShadowOffset: { width: 0, height: 0 },
+      textShadowRadius: 7,
     },
   });
