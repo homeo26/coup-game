@@ -238,8 +238,18 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   Pack, CC0) on the Home screen (persisted); shown in the lobby, table
   seats, chat and final standings. Offline bots get distinct animals.
   Legacy character-portrait avatars from old clients still render.
-- **Table music**: a quiet CC0 inn loop plays while in a room
-  (settings toggle), alongside per-event sound effects.
+- **Table music**: a quiet CC0 inn loop plays app-wide (settings
+  toggle), pausing when the app is backgrounded.
+- **Character voices**: each character announces its own action in a
+  distinct voice — Duke "takes three coins", Captain "steals two coins",
+  Ambassador "exchanges with the Court", Assassin "strikes, lose one
+  influence", Contessa "blocks the assassination" (played on the claim,
+  bluffs included). Five different speakers, each with its own register
+  and room (scripts/gen-voices.sh).
+- **Audio robustness**: SFX play in iOS silent mode (the in-app toggles
+  are the mute control), mix rather than fight for focus, every player
+  is preloaded at startup, a swallowed first play is retried, and a
+  broken player is dropped and rebuilt — audio can never break play.
 - Full Arabic + English; layout direction is applied manually per
   component (native direction stays LTR).
 - 10+ coins: UI disables everything except Coup and says why.

@@ -46,6 +46,11 @@ export default function TabsHost() {
     setChatSeen(0);
   }, [roomCode]);
 
+  // Preload every sound once, so the first cue never gets swallowed.
+  useEffect(() => {
+    sound.warmup();
+  }, []);
+
   // Music plays everywhere in the app (home included) while the toggle
   // is on, and pauses whenever the app goes to the background.
   useEffect(() => {

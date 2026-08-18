@@ -64,6 +64,27 @@ export function ensureAudioMode() {
   });
 }
 
+/**
+ * Prime the audio engine: set the audio mode and create every player up
+ * front, so the first cue of a session can't be swallowed while a source
+ * is still loading (a common failure on slower/older devices).
+ */
+export function warmup() {
+  try {
+    ensureAudioMode();
+    (Object.keys(SOURCES) as SoundKey[]).forEach((key) => {
+      if (players.has(key)) return;
+      try {
+        const p = createAudioPlayer(SOURCES[key]);
+        p.volume = 0.8;
+        players.set(key, p);
+      } catch {
+        // skip this cue; play() will retry creating it on demand
+      }
+    });
+  } catch {}
+}
+
 export function play(key: SoundKey) {
   if (!getSettings().sounds) return;
   try {
