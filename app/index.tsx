@@ -63,8 +63,13 @@ export default function TabsHost() {
         music.stop();
       }
     });
+    // watchdog: sound effects and focus changes can stop the loop
+    const tick = setInterval(() => {
+      if (musicOn && AppState.currentState === 'active') music.ensurePlaying();
+    }, 4000);
     return () => {
       sub.remove();
+      clearInterval(tick);
       music.stop();
     };
   }, [musicOn]);

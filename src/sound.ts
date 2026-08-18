@@ -46,11 +46,18 @@ export const ROLE_VOICE: Record<string, SoundKey> = {
 export type SoundKey = keyof typeof SOURCES;
 
 /**
- * Two players per cue, used round-robin: a cue can retrigger while the
- * previous instance is still finishing (rapid coins, dealing), and a
- * player that has ended never blocks the next play.
+ * Players are created lazily and capped: Android only allows a limited
+ * number of concurrent media codecs, and holding one per cue (times a
+ * pool) starves everything else — including the music loop. We keep a
+ * small LRU of pools and release the oldest when the cap is reached.
+ *
+ * Short, frequently repeated cues get two players so they can overlap;
+ * long ones (voices, music-adjacent stingers) get one.
  */
 const pools = new Map<SoundKey, { players: AudioPlayer[]; next: number }>();
+const lru: SoundKey[] = [];
+const MAX_POOLS = 6;
+const DOUBLE: SoundKey[] = ['tap', 'coins', 'card', 'chat'];
 let audioModeSet = false;
 
 function makePlayer(key: SoundKey): AudioPlayer {
@@ -59,12 +66,30 @@ function makePlayer(key: SoundKey): AudioPlayer {
   return p;
 }
 
+function releasePool(key: SoundKey) {
+  const entry = pools.get(key);
+  pools.delete(key);
+  const i = lru.indexOf(key);
+  if (i >= 0) lru.splice(i, 1);
+  entry?.players.forEach((p) => {
+    try {
+      p.pause();
+      (p as unknown as { remove?: () => void }).remove?.();
+    } catch {}
+  });
+}
+
 function pool(key: SoundKey) {
   let entry = pools.get(key);
   if (!entry) {
-    entry = { players: [makePlayer(key), makePlayer(key)], next: 0 };
+    while (lru.length >= MAX_POOLS) releasePool(lru[0]);
+    const size = DOUBLE.includes(key) ? 2 : 1;
+    entry = { players: Array.from({ length: size }, () => makePlayer(key)), next: 0 };
     pools.set(key, entry);
   }
+  const i = lru.indexOf(key);
+  if (i >= 0) lru.splice(i, 1);
+  lru.push(key);
   return entry;
 }
 
@@ -84,14 +109,14 @@ function fire(key: SoundKey, p: AudioPlayer, attempt = 0) {
           fire(key, p, 1);
         } else {
           // give up on this instance and rebuild the pool for next time
-          pools.delete(key);
+          releasePool(key);
         }
       } catch {
-        pools.delete(key);
+        releasePool(key);
       }
     }, 110);
   } catch {
-    pools.delete(key);
+    releasePool(key);
   }
 }
 
@@ -119,12 +144,12 @@ export function ensureAudioMode() {
 export function warmup() {
   try {
     ensureAudioMode();
-    (Object.keys(SOURCES) as SoundKey[]).forEach((key) => {
+    // only the cues that fire first in a session — everything else is
+    // built on demand, so codecs stay available for the music loop.
+    (['tap', 'coins'] as SoundKey[]).forEach((key) => {
       try {
         pool(key);
-      } catch {
-        // skip this cue; play() will build it on demand
-      }
+      } catch {}
     });
   } catch {}
 }
@@ -138,6 +163,6 @@ export function play(key: SoundKey) {
     entry.next += 1;
     fire(key, p);
   } catch {
-    pools.delete(key);
+    releasePool(key);
   }
 }

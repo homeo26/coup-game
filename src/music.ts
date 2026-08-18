@@ -36,6 +36,16 @@ export function start() {
   }
 }
 
+/**
+ * Keep the loop alive: audio focus changes, codec pressure or a device
+ * quirk can silently stop it, so callers can poll this cheaply.
+ */
+export function ensurePlaying() {
+  try {
+    if (player && !player.playing) player.play();
+  } catch {}
+}
+
 export function stop() {
   try {
     if (player?.playing) player.pause();
