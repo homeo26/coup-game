@@ -144,7 +144,126 @@ def make_face():
     print("face.png")
 
 
+def make_faces():
+    """Fully illustrated card faces, one per character: chamfered cyber
+    frame, role-tinted circuit field, hex portrait window with chrome
+    ring and scanlines, corner brackets and an emblem watermark. Text is
+    NOT baked in — the component draws the localized name."""
+    FW, FH = 512, 728
+    ROLES = {
+        "duke": (200, 53, 91),
+        "assassin": (139, 147, 163),
+        "captain": (77, 143, 219),
+        "ambassador": (168, 178, 62),
+        "contessa": (224, 90, 51),
+    }
+    art_dir = os.path.join(os.path.dirname(__file__), "..", "assets", "roles")
+
+    for role, col in ROLES.items():
+        img = Image.new("RGBA", (FW, FH), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+
+        # chamfered card silhouette (cyborg panel shape)
+        cut = 46
+        shape = [
+            (cut, 0), (FW - cut, 0), (FW, cut), (FW, FH - cut),
+            (FW - cut, FH), (cut, FH), (0, FH - cut), (0, cut),
+        ]
+        d.polygon(shape, fill=(16, 18, 24, 255))
+
+        mask = Image.new("L", (FW, FH), 0)
+        ImageDraw.Draw(mask).polygon(shape, fill=255)
+
+        # role-tinted glow field: strongest at the top, fading out — the
+        # dark panel stays dominant so the card reads as unlit metal.
+        field = Image.new("RGBA", (FW, FH), (0, 0, 0, 0))
+        df = ImageDraw.Draw(field)
+        for y in range(FH):
+            t = y / FH
+            a = int(46 * (1 - t) ** 1.6 + 6)
+            df.line([(0, y), (FW, y)], fill=col + (a,))
+        fa = field.split()[3].point(lambda v: v)
+        field.putalpha(Image.composite(fa, Image.new("L", (FW, FH), 0), mask))
+        img.alpha_composite(field)
+
+        # corner glow pools for depth
+        pool = Image.new("RGBA", (FW, FH), (0, 0, 0, 0))
+        dp = ImageDraw.Draw(pool)
+        dp.ellipse([-120, -200, FW + 120, 260], fill=col + (34,))
+        pool = pool.filter(ImageFilter.GaussianBlur(60))
+        pool.putalpha(Image.composite(pool.split()[3], Image.new("L", (FW, FH), 0), mask))
+        img.alpha_composite(pool)
+
+        # circuit traces in the role colour, glowing, kept off-centre
+        tr = Image.new("RGBA", (FW, FH), (0, 0, 0, 0))
+        dt = ImageDraw.Draw(tr)
+        rng = random.Random(hash(role) & 0xFFFF)
+        for i in range(16):
+            y = rng.randint(40, FH - 40)
+            x = rng.choice([18, 34, FW - 18, FW - 34])
+            run = rng.randint(50, 150)
+            dx = 1 if x < FW / 2 else -1
+            pts = [(x, y), (x + dx * run, y), (x + dx * run, y + rng.choice([-1, 1]) * rng.randint(30, 90))]
+            bright = tuple(min(255, c + 60) for c in col)
+            dt.line(pts, fill=(bright if i % 3 == 0 else col) + (210,), width=3, joint="curve")
+            ex, ey = pts[-1]
+            dt.ellipse([ex - 5, ey - 5, ex + 5, ey + 5], fill=col + (230,))
+        tr = Image.composite(tr, Image.new("RGBA", (FW, FH), (0, 0, 0, 0)), mask)
+        img.alpha_composite(glow(tr, 7, 0.5))
+        img.alpha_composite(tr)
+
+        # emblem watermark: big faint hexagon behind everything
+        wm = Image.new("RGBA", (FW, FH), (0, 0, 0, 0))
+        dw = ImageDraw.Draw(wm)
+        dw.polygon(hex_points(FW / 2, FH * 0.42, 190, math.pi / 6), outline=col + (60,), width=10)
+        img.alpha_composite(wm)
+
+        # hex portrait window
+        pcx, pcy, pr = FW / 2, FH * 0.40, 150
+        port_path = os.path.join(art_dir, f"{role}.png")
+        if os.path.exists(port_path):
+            port = Image.open(port_path).convert("RGBA").resize((int(pr * 2), int(pr * 2)), Image.LANCZOS)
+            hexmask = Image.new("L", (FW, FH), 0)
+            ImageDraw.Draw(hexmask).polygon(hex_points(pcx, pcy, pr, math.pi / 6), fill=255)
+            layer = Image.new("RGBA", (FW, FH), (0, 0, 0, 0))
+            layer.paste(port, (int(pcx - pr), int(pcy - pr)))
+            img.paste(layer, (0, 0), Image.composite(layer.split()[3], Image.new("L", (FW, FH), 0), hexmask))
+            # scanlines over the portrait
+            sl = Image.new("RGBA", (FW, FH), (0, 0, 0, 0))
+            dsl = ImageDraw.Draw(sl)
+            for y in range(int(pcy - pr), int(pcy + pr), 4):
+                dsl.line([(pcx - pr, y), (pcx + pr, y)], fill=(0, 0, 0, 60), width=1)
+            img.alpha_composite(Image.composite(sl, Image.new("RGBA", (FW, FH), (0, 0, 0, 0)), hexmask))
+        # chrome hex ring + inner tint ring
+        dr = ImageDraw.Draw(img)
+        dr.polygon(hex_points(pcx, pcy, pr + 8, math.pi / 6), outline=SILVER + (235,), width=7)
+        dr.polygon(hex_points(pcx, pcy, pr - 4, math.pi / 6), outline=col + (200,), width=3)
+        # bolts at the hex vertices
+        for vx, vy in hex_points(pcx, pcy, pr + 8, math.pi / 6):
+            dr.ellipse([vx - 7, vy - 7, vx + 7, vy + 7], fill=SILVER + (255,))
+            dr.ellipse([vx - 3, vy - 3, vx + 3, vy + 3], fill=(16, 18, 24, 255))
+
+        # corner brackets
+        b, ln, wd = 26, 54, 5
+        for (bx, by, sx, sy) in (
+            (b, b + 22, 1, 1), (FW - b, b + 22, -1, 1),
+            (b, FH - b - 22, 1, -1), (FW - b, FH - b - 22, -1, -1),
+        ):
+            dr.line([(bx, by), (bx + sx * ln, by)], fill=SILVER + (220,), width=wd)
+            dr.line([(bx, by), (bx, by + sy * ln)], fill=SILVER + (220,), width=wd)
+
+        # bottom plate backing (component draws the name on top)
+        dr.rounded_rectangle([54, FH - 148, FW - 54, FH - 66], radius=16,
+                             fill=(9, 11, 15, 225), outline=col + (200,), width=4)
+        # frame edge along the chamfered silhouette
+        dr.line(shape + [shape[0]], fill=SILVER + (150,), width=4, joint="curve")
+
+        img.save(os.path.join(OUT, f"face-{role}.png"))
+        print(f"face-{role}.png")
+
+
 if __name__ == "__main__":
     make_back()
     make_face()
+    make_faces()
     print("card art written to", os.path.abspath(OUT))

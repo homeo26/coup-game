@@ -22,6 +22,15 @@ import { RolePortrait } from './RolePortrait';
 import { Theme, font, roleColors, useStyles } from '../theme';
 import { t, TKey } from '../i18n';
 
+/** Pre-rendered illustrated faces (scripts/gen-cards.py). */
+const FACE_ART: Record<Role, number> = {
+  duke: require('../../assets/cards/face-duke.png'),
+  assassin: require('../../assets/cards/face-assassin.png'),
+  captain: require('../../assets/cards/face-captain.png'),
+  ambassador: require('../../assets/cards/face-ambassador.png'),
+  contessa: require('../../assets/cards/face-contessa.png'),
+};
+
 interface Props {
   /** Role to show when face-up; undefined renders a face-down back. */
   role?: Role;
@@ -71,7 +80,7 @@ export function InfluenceCard({ role, dead, width = 96, selected, tilt = 0 }: Pr
     <Animated.View
       style={[
         styles.card,
-        { width, height, borderColor: faceUp ? rc + '77' : styles.card.borderColor },
+        { width, height },
         selected ? styles.selected : null,
         dead ? styles.dead : null,
         anim,
@@ -79,30 +88,22 @@ export function InfluenceCard({ role, dead, width = 96, selected, tilt = 0 }: Pr
     >
       {faceUp && role ? (
         <View style={styles.face}>
-          <Image
-            source={require('../../assets/cards/face.png')}
-            style={{ position: 'absolute', width, height }}
-            resizeMode="cover"
-          />
-          <LinearGradient
-            colors={[rc + '30', 'transparent', rc + '1c']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          {/* inner frame like a printed card */}
-          <View style={[styles.frame, { borderColor: rc + '55' }]} />
-          {/* corner pip */}
-          <View style={styles.pip}>
-            <RoleArt role={role} size={Math.max(12, Math.round(width * 0.16))} />
-          </View>
-          <View style={styles.artWrap}>
-            <RolePortrait role={role} size={Math.round(width * 0.58)} ring={2} />
-          </View>
-          <View style={[styles.namePlate, { borderColor: rc + '44' }]}>
+          <Image source={FACE_ART[role]} style={{ width, height }} resizeMode="cover" />
+          {/* the art leaves a plate for the localized name */}
+          <View
+            style={[
+              styles.namePlate,
+              {
+                left: width * 0.11,
+                right: width * 0.11,
+                bottom: height * 0.093,
+                height: height * 0.112,
+              },
+            ]}
+          >
             <Text
               numberOfLines={1}
-              style={[styles.name, { color: rc, fontSize: Math.max(10, width * 0.13) }]}
+              style={[styles.name, { color: rc, fontSize: Math.max(8, width * 0.125) }]}
             >
               {t(role as TKey)}
             </Text>
@@ -124,44 +125,16 @@ const makeStyles = (theme: Theme) =>
   StyleSheet.create({
     card: {
       borderRadius: 10,
-      backgroundColor: theme.colors.surfaceElevated,
-      borderWidth: 1.5,
-      borderColor: theme.colors.border,
       overflow: 'hidden',
       ...theme.shadow.card,
     },
     face: {
       flex: 1,
     },
-    frame: {
+    namePlate: {
       position: 'absolute',
-      top: 4,
-      left: 4,
-      right: 4,
-      bottom: 4,
-      borderWidth: 1,
-      borderRadius: 7,
-    },
-    pip: {
-      position: 'absolute',
-      top: 7,
-      left: 7,
-      opacity: 0.95,
-    },
-    artWrap: {
-      flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingBottom: 2,
-    },
-    namePlate: {
-      marginHorizontal: 8,
-      marginBottom: 8,
-      borderWidth: 1,
-      borderRadius: 6,
-      paddingVertical: 1,
-      alignItems: 'center',
-      backgroundColor: 'rgba(10, 12, 16, 0.45)',
     },
     name: {
       fontFamily: font('bold'),
