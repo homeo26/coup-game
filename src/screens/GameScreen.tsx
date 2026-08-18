@@ -180,7 +180,15 @@ function logSound(key: string, role?: string): sound.SoundKey | null {
 /* ------------------------------------------------------------------ */
 
 /** Coin count that pulses whenever the amount changes. */
-function AnimatedCoins({ amount, size }: { amount: number; size: number }) {
+function AnimatedCoins({
+  amount,
+  size,
+  chip,
+}: {
+  amount: number;
+  size: number;
+  chip?: boolean;
+}) {
   const scale = useSharedValue(1);
   const prev = useRef(amount);
   useEffect(() => {
@@ -195,7 +203,7 @@ function AnimatedCoins({ amount, size }: { amount: number; size: number }) {
   const st = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
     <Animated.View style={st}>
-      <CoinCount amount={amount} size={size} />
+      <CoinCount amount={amount} size={size} chip={chip} />
     </Animated.View>
   );
 }
@@ -374,7 +382,7 @@ function TableSeat({
         {dead ? (
           <Text style={styles.deadLabel}>{t('eliminated')}</Text>
         ) : (
-          <AnimatedCoins amount={p.coins} size={14} />
+          <AnimatedCoins amount={p.coins} size={15} chip />
         )}
       </Pressy>
       {emote ? (
@@ -1185,7 +1193,7 @@ export function GameScreen() {
               </Animated.Text>
             ) : null}
           </View>
-          <AnimatedCoins amount={me.coins} size={20} />
+          <AnimatedCoins amount={me.coins} size={20} chip />
         </View>
         <View style={styles.hand}>
           {me.cards.map((c, i) => (
@@ -1383,9 +1391,9 @@ const makeStyles = (theme: Theme) =>
       height: 30,
     },
     deckText: {
-      fontSize: 13,
+      fontSize: 14,
       fontFamily: latinFont('bold'),
-      color: theme.colors.inkSoft,
+      color: theme.colors.ink,
     },
     logStrip: {
       flexDirection: 'row',
@@ -1482,10 +1490,21 @@ const makeStyles = (theme: Theme) =>
       borderWidth: 1.5,
       borderColor: theme.colors.goldDark,
     },
+    courtCountChip: {
+      minWidth: 30,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: theme.radius.pill,
+      backgroundColor: 'rgba(6, 8, 12, 0.94)',
+      borderWidth: 1.5,
+      borderColor: 'rgba(233, 235, 240, 0.45)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     courtCount: {
-      fontSize: 15,
+      fontSize: 16,
       fontFamily: latinFont('bold'),
-      color: theme.colors.goldLight,
+      color: '#f2f4f8',
     },
     tableSeat: {
       position: 'absolute',
