@@ -1177,7 +1177,7 @@ export function GameScreen() {
           responding={responders.includes(me.id)}
           targetable={false}
           onTarget={() => {}}
-          anchor={{ x: 0.5, y: 0.64 }}
+          anchor={{ x: 0.5, y: 0.70 }}
           showFaces
         />
       </Animated.View>
@@ -1442,6 +1442,8 @@ const makeStyles = (theme: Theme) =>
       overflow: 'hidden',
       alignItems: 'center',
       justifyContent: 'center',
+      // keeps the Court/discards in the upper half, clear of my seat
+      paddingBottom: '26%',
     },
     feltInnerLine: {
       position: 'absolute',
