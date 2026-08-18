@@ -48,7 +48,7 @@ export type SoundKey = keyof typeof SOURCES;
 const players = new Map<SoundKey, AudioPlayer>();
 let audioModeSet = false;
 
-function ensureAudioMode() {
+export function ensureAudioMode() {
   if (audioModeSet) return;
   audioModeSet = true;
   // Games play their SFX even with the iOS mute switch on (the in-app
@@ -74,7 +74,15 @@ export function play(key: SoundKey) {
       p.volume = 0.8;
       players.set(key, p);
       p.play();
-      return; // fresh player starts from 0 — no seek needed
+      // Some devices swallow the very first play while the source is
+      // still loading — nudge it once more shortly after.
+      const fresh = p;
+      setTimeout(() => {
+        try {
+          if (!fresh.playing) fresh.play();
+        } catch {}
+      }, 120);
+      return;
     }
     // Replaying: rewind defensively (some devices reject seek pre-load)
     try {

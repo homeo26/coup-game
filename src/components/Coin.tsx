@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Theme, latinFont, useStyles } from '../theme';
 
 const COIN = require('../../assets/coin.png');
@@ -28,11 +29,19 @@ export function CoinCount({
   const styles = useStyles(makeStyles);
   return (
     <View style={[styles.row, chip && styles.chip]}>
+      {chip ? (
+        <LinearGradient
+          colors={['rgba(58,63,74,0.95)', 'rgba(10,12,16,0.95)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
       <CoinIcon size={size} />
       <Text
         style={[
           styles.amount,
-          { fontSize: size * 0.95, lineHeight: size * 1.35 },
+          { fontSize: size * 0.95, lineHeight: size * 1.3 },
           chip && styles.amountChip,
         ]}
       >
@@ -50,13 +59,13 @@ const makeStyles = (theme: Theme) =>
       gap: 4,
     },
     chip: {
-      backgroundColor: 'rgba(8, 10, 14, 0.9)',
       borderRadius: theme.radius.pill,
-      borderWidth: 1.5,
-      borderColor: 'rgba(233, 235, 240, 0.35)',
-      paddingHorizontal: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(233,235,240,0.28)',
+      paddingHorizontal: 7,
       paddingVertical: 1,
-      gap: 5,
+      gap: 4,
+      overflow: 'hidden',
     },
     amount: {
       fontFamily: latinFont('bold'),
@@ -66,6 +75,6 @@ const makeStyles = (theme: Theme) =>
       textShadowRadius: 3,
     },
     amountChip: {
-      color: '#f2f4f8',
+      color: '#ffffff',
     },
   });

@@ -5,7 +5,7 @@
  * Game following the active room's state.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { BackHandler, StyleSheet, View } from 'react-native';
+import { AppState, BackHandler, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import PagerView from 'react-native-pager-view';
 import { ChatScreen } from '../src/screens/ChatScreen';
@@ -46,11 +46,23 @@ export default function TabsHost() {
     setChatSeen(0);
   }, [roomCode]);
 
-  // Table music plays while you're in a room (and the toggle is on).
+  // Music plays everywhere in the app (home included) while the toggle
+  // is on, and pauses whenever the app goes to the background.
   useEffect(() => {
-    if (roomCode && musicOn) music.start();
+    if (musicOn) music.start();
     else music.stop();
-  }, [roomCode, musicOn]);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        if (musicOn) music.start();
+      } else {
+        music.stop();
+      }
+    });
+    return () => {
+      sub.remove();
+      music.stop();
+    };
+  }, [musicOn]);
 
   // Unread chat: everything after the last time the chat tab was open.
   const chatLen = room?.chat.length ?? 0;

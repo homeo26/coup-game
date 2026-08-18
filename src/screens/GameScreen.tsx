@@ -1037,6 +1037,12 @@ export function GameScreen() {
             setDeckOpen(true);
           }}
         >
+          <LinearGradient
+            colors={['rgba(58,63,74,0.9)', 'rgba(10,12,16,0.95)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
           <Ionicons name="albums-outline" size={14} color={theme.colors.goldLight} />
           <Text style={styles.deckText}>{g.deck.length}</Text>
         </Pressy>
@@ -1382,18 +1388,19 @@ const makeStyles = (theme: Theme) =>
     deckChip: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
-      backgroundColor: theme.colors.surface,
+      gap: 6,
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: 'rgba(233,235,240,0.28)',
       borderRadius: theme.radius.pill,
-      paddingHorizontal: 10,
-      height: 30,
+      paddingHorizontal: 12,
+      height: 32,
+      overflow: 'hidden',
     },
+
     deckText: {
       fontSize: 14,
       fontFamily: latinFont('bold'),
-      color: theme.colors.ink,
+      color: '#ffffff',
     },
     logStrip: {
       flexDirection: 'row',
@@ -1491,20 +1498,20 @@ const makeStyles = (theme: Theme) =>
       borderColor: theme.colors.goldDark,
     },
     courtCountChip: {
-      minWidth: 30,
-      paddingHorizontal: 6,
+      minWidth: 32,
+      paddingHorizontal: 7,
       paddingVertical: 1,
       borderRadius: theme.radius.pill,
-      backgroundColor: 'rgba(6, 8, 12, 0.94)',
-      borderWidth: 1.5,
-      borderColor: 'rgba(233, 235, 240, 0.45)',
+      borderWidth: 1,
+      borderColor: 'rgba(233,235,240,0.3)',
       alignItems: 'center',
       justifyContent: 'center',
+      overflow: 'hidden',
     },
     courtCount: {
       fontSize: 16,
       fontFamily: latinFont('bold'),
-      color: '#f2f4f8',
+      color: '#ffffff',
     },
     tableSeat: {
       position: 'absolute',
