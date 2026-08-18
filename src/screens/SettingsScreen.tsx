@@ -79,13 +79,15 @@ export function SettingsScreen() {
           </View>
         </View>
 
+        {/* Audio — SFX and music are fully independent */}
+        <Text style={[styles.sectionLabel, rtlText]}>{t('audioSection')}</Text>
         {/* Sounds */}
         <View style={styles.card}>
           <View style={[styles.row, rtl && styles.rowReverse]}>
             <Ionicons name="volume-medium" size={20} color={theme.colors.gold} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowTitle, rtlText]}>{t('soundsSetting')}</Text>
-              <Text style={[styles.rowDesc, rtlText]}>{t('soundsDesc')}</Text>
+              <Text style={[styles.rowDesc, rtlText]}>{t('soundsDesc2')}</Text>
             </View>
             <Pressy
               scaleTo={0.9}
@@ -149,6 +151,14 @@ const makeStyles = (theme: Theme) =>
     logo: {
       width: 130,
       height: 130,
+    },
+    sectionLabel: {
+      fontSize: 13,
+      fontFamily: font('bold'),
+      color: theme.colors.goldLight,
+      marginTop: 6,
+      marginBottom: 8,
+      letterSpacing: 0.5,
     },
     title: {
       fontSize: 24,

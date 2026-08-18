@@ -48,25 +48,41 @@ export type SoundKey = keyof typeof SOURCES;
 const players = new Map<SoundKey, AudioPlayer>();
 let audioModeSet = false;
 
+function ensureAudioMode() {
+  if (audioModeSet) return;
+  audioModeSet = true;
+  // Games play their SFX even with the iOS mute switch on (the in-app
+  // toggles are the mute control); mix with other apps' audio so we
+  // never fight for focus on picky Android devices.
+  setAudioModeAsync({
+    playsInSilentMode: true,
+    interruptionMode: 'mixWithOthers',
+    interruptionModeAndroid: 'duckOthers',
+    shouldPlayInBackground: false,
+  }).catch(() => {
+    audioModeSet = false; // retry on the next play
+  });
+}
+
 export function play(key: SoundKey) {
   if (!getSettings().sounds) return;
   try {
-    if (!audioModeSet) {
-      audioModeSet = true;
-      // Mix with background music, respect the mute switch on iOS.
-      setAudioModeAsync({ playsInSilentMode: false, interruptionModeAndroid: 'duckOthers' }).catch(
-        () => {},
-      );
-    }
+    ensureAudioMode();
     let p = players.get(key);
     if (!p) {
       p = createAudioPlayer(SOURCES[key]);
       p.volume = 0.8;
       players.set(key, p);
+      p.play();
+      return; // fresh player starts from 0 — no seek needed
     }
-    p.seekTo(0);
+    // Replaying: rewind defensively (some devices reject seek pre-load)
+    try {
+      p.seekTo(0);
+    } catch {}
     p.play();
   } catch {
-    // Sound must never break the game.
+    // A broken player must never break the game — drop and rebuild next time.
+    players.delete(key);
   }
 }

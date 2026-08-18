@@ -197,20 +197,20 @@ function AnimatedCoins({ amount, size }: { amount: number; size: number }) {
  *  anchoring each seat's center) — mirrors a real round table. */
 const SEAT_ANCHORS: Record<number, { x: number; y: number }[]> = {
   1: [{ x: 0.5, y: 0.02 }],
-  2: [{ x: 0.07, y: 0.38 }, { x: 0.93, y: 0.38 }],
-  3: [{ x: 0.07, y: 0.42 }, { x: 0.5, y: 0.02 }, { x: 0.93, y: 0.42 }],
+  2: [{ x: 0.13, y: 0.38 }, { x: 0.87, y: 0.38 }],
+  3: [{ x: 0.13, y: 0.42 }, { x: 0.5, y: 0.02 }, { x: 0.87, y: 0.42 }],
   4: [
-    { x: 0.06, y: 0.5 },
-    { x: 0.22, y: 0.07 },
-    { x: 0.78, y: 0.07 },
-    { x: 0.94, y: 0.5 },
+    { x: 0.12, y: 0.5 },
+    { x: 0.26, y: 0.07 },
+    { x: 0.74, y: 0.07 },
+    { x: 0.88, y: 0.5 },
   ],
   5: [
-    { x: 0.06, y: 0.52 },
-    { x: 0.16, y: 0.1 },
+    { x: 0.12, y: 0.52 },
+    { x: 0.22, y: 0.1 },
     { x: 0.5, y: 0.02 },
-    { x: 0.84, y: 0.1 },
-    { x: 0.94, y: 0.52 },
+    { x: 0.78, y: 0.1 },
+    { x: 0.88, y: 0.52 },
   ],
 };
 
@@ -1062,7 +1062,7 @@ export function GameScreen() {
           responding={responders.includes(me.id)}
           targetable={false}
           onTarget={() => {}}
-          anchor={{ x: 0.5, y: 0.78 }}
+          anchor={{ x: 0.5, y: 0.64 }}
           showFaces
         />
       </Animated.View>

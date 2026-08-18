@@ -244,8 +244,13 @@ export const dict = {
   language: { en: 'Language', ar: 'اللغة' },
   hapticsSetting: { en: 'Haptic feedback', ar: 'الاهتزاز عند اللمس' },
   hapticsDesc: { en: 'Tactile feedback on taps', ar: 'ردة فعل لمسية عند الضغط' },
+  audioSection: { en: 'Audio', ar: 'الصوت' },
   soundsSetting: { en: 'Sound effects', ar: 'المؤثرات الصوتية' },
   soundsDesc: { en: 'Cards, coins and table sounds', ar: 'أصوات البطاقات والعملات والطاولة' },
+  soundsDesc2: {
+    en: 'Cards, coins, voices — separate from music',
+    ar: 'البطاقات والعملات والأصوات — منفصلة عن الموسيقى',
+  },
   musicSetting: { en: 'Table music', ar: 'موسيقى الطاولة' },
   musicDesc: { en: 'Quiet inn tune while in a game', ar: 'لحن هادئ أثناء اللعب' },
   about: { en: 'About', ar: 'حول' },
