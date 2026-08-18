@@ -33,9 +33,10 @@ const LAYERS: LayerSpec[] = [
   { color: roleColors.captain, start: { x: 1, y: 0 }, end: { x: 0, y: 1 }, period: 11000, delay: 2400, peak: 0.14 },
   { color: roleColors.contessa, start: { x: 0.2, y: 1 }, end: { x: 0.8, y: 0 }, period: 13000, delay: 5200, peak: 0.12 },
   { color: roleColors.ambassador, start: { x: 1, y: 0.7 }, end: { x: 0, y: 0.2 }, period: 15000, delay: 7600, peak: 0.1 },
+  { color: roleColors.assassin, start: { x: 0.5, y: 0 }, end: { x: 0.5, y: 1 }, period: 12000, delay: 3800, peak: 0.09 },
 ];
 
-function Layer({ spec }: { spec: LayerSpec }) {
+function Layer({ spec, boost = 1 }: { spec: LayerSpec; boost?: number }) {
   const breath = useSharedValue(0);
   useEffect(() => {
     breath.value = withDelay(
@@ -47,7 +48,7 @@ function Layer({ spec }: { spec: LayerSpec }) {
       ),
     );
   }, [breath, spec]);
-  const anim = useAnimatedStyle(() => ({ opacity: breath.value * spec.peak }));
+  const anim = useAnimatedStyle(() => ({ opacity: breath.value * spec.peak * boost }));
   return (
     <AnimatedGradient
       colors={[spec.color, 'transparent', spec.color + '55']}
@@ -59,11 +60,15 @@ function Layer({ spec }: { spec: LayerSpec }) {
   );
 }
 
-export function Breathing() {
+/**
+ * `vivid` turns the ambience up for the home screen, where the five
+ * character colours are the whole point of the look.
+ */
+export function Breathing({ vivid }: { vivid?: boolean } = {}) {
   return (
     <>
       {LAYERS.map((l, i) => (
-        <Layer key={i} spec={l} />
+        <Layer key={i} spec={l} boost={vivid ? 2.6 : 1} />
       ))}
     </>
   );

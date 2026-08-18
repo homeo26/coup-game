@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Theme, font, latinFont, useStyles, useTheme } from '../theme';
+import { Theme, font, latinFont, roleColors, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
 import { Breathing } from '../components/Breathing';
 import { ANIMALS, Avatar } from '../components/Avatar';
@@ -111,7 +111,7 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <Breathing />
+      <Breathing vivid />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -156,7 +156,11 @@ export function HomeScreen() {
             </View>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.duration(400).delay(80)} style={styles.card}>
+          <Animated.View
+            entering={FadeInDown.duration(400).delay(80)}
+            style={[styles.card, { borderColor: roleColors.duke + '99' }]}
+          >
+            <View style={[styles.cardEdge, { backgroundColor: roleColors.duke }]} />
             <Text style={[styles.label, rtl && styles.rtlText]}>{t('yourName')}</Text>
             <TextInput
               value={name ?? playerName}
@@ -182,7 +186,11 @@ export function HomeScreen() {
             </Pressy>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.duration(400).delay(160)} style={styles.card}>
+          <Animated.View
+            entering={FadeInDown.duration(400).delay(160)}
+            style={[styles.card, { borderColor: roleColors.captain + '99' }]}
+          >
+            <View style={[styles.cardEdge, { backgroundColor: roleColors.captain }]} />
             <Text style={[styles.label, rtl && styles.rtlText]}>{t('joinGame')}</Text>
             <View style={[styles.joinRow, rtl && styles.rowReverse]}>
               <TextInput
@@ -208,7 +216,11 @@ export function HomeScreen() {
             </View>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.duration(400).delay(240)} style={styles.card}>
+          <Animated.View
+            entering={FadeInDown.duration(400).delay(240)}
+            style={[styles.card, { borderColor: roleColors.ambassador + '99' }]}
+          >
+            <View style={[styles.cardEdge, { backgroundColor: roleColors.ambassador }]} />
             <Text style={[styles.label, rtl && styles.rtlText]}>{t('offlineMode')}</Text>
             <View style={[styles.botRow, rtl && styles.rowReverse]}>
               <Text style={[styles.botLabel, rtl && styles.rtlText]}>{t('botCount')}</Text>
@@ -311,11 +323,19 @@ const makeStyles = (theme: Theme) =>
     card: {
       backgroundColor: theme.colors.surface,
       borderRadius: theme.radius.lg,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: theme.colors.border,
       padding: 18,
       marginBottom: 16,
+      overflow: 'hidden',
       ...theme.shadow.card,
+    },
+    cardEdge: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 4,
     },
     label: {
       fontSize: 13,
