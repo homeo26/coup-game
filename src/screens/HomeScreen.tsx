@@ -111,7 +111,13 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <Breathing vivid />
+      {/* neon-cyborg backdrop (scripts/gen-bg.py) + slow character wash */}
+      <Image
+        source={require('../../assets/bg-neon.png')}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+      />
+      <Breathing />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
