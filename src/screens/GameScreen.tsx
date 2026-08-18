@@ -1495,11 +1495,8 @@ const makeStyles = (theme: Theme) =>
     tableRimOuter: {
       flex: 1,
       borderRadius: 96,
-      backgroundColor: '#16222e',
-      borderWidth: 1.5,
-      borderColor: 'rgba(34, 211, 238, 0.55)',
+      backgroundColor: '#3a3f4a',
       padding: 5,
-      ...theme.shadow.goldGlow,
     },
     felt: {
       flex: 1,
@@ -1519,7 +1516,7 @@ const makeStyles = (theme: Theme) =>
       bottom: 14,
       borderRadius: 80,
       borderWidth: 1.5,
-      borderColor: 'rgba(34, 211, 238, 0.30)',
+      borderColor: 'rgba(255,255,255,0.10)',
     },
     tableCenter: {
       position: 'absolute',
@@ -1569,24 +1566,20 @@ const makeStyles = (theme: Theme) =>
       borderColor: theme.colors.goldDark,
     },
     courtCountChip: {
-      minWidth: 34,
-      paddingHorizontal: 8,
+      minWidth: 32,
+      paddingHorizontal: 7,
       paddingVertical: 1,
       borderRadius: theme.radius.pill,
-      borderWidth: 1.5,
-      borderColor: theme.colors.gold,
+      borderWidth: 1,
+      borderColor: 'rgba(233,235,240,0.3)',
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
-      ...theme.shadow.goldGlow,
     },
     courtCount: {
-      fontSize: 17,
+      fontSize: 16,
       fontFamily: latinFont('bold'),
-      color: '#7ef0ff',
-      textShadowColor: '#22d3ee',
-      textShadowOffset: { width: 0, height: 0 },
-      textShadowRadius: 8,
+      color: '#ffffff',
     },
     tableSeat: {
       position: 'absolute',
@@ -1683,7 +1676,6 @@ const makeStyles = (theme: Theme) =>
     seatNameChipTurn: {
       backgroundColor: theme.colors.gold,
       borderColor: theme.colors.goldLight,
-      ...theme.shadow.goldGlow,
     },
     seatNameTextTurn: {
       color: theme.colors.inkOnGold,

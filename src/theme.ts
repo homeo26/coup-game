@@ -1,6 +1,5 @@
 /**
- * Coup theme — cyborg-noir palette: near-black chrome surfaces with neon
- * cyan accents (keys keep the historical 'gold' names), plus a
+ * Coup theme — dystopian dark palette with antique gold accents, plus a
  * signature color per character (mirroring the physical game's role icons:
  * Duke's crimson star, Captain's blue chevrons, Assassin's black skull,
  * Contessa's scarlet crest, Ambassador's olive-gold exchange marks).
@@ -24,39 +23,39 @@ export const theme = {
   colors: {
     // Accent — polished silver, matching the game's coin token.
     // (Keys keep the historical 'gold' names to avoid a mass rename.)
-    gold: '#22d3ee',
-    goldDark: '#0e7490',
-    goldLight: '#7ef0ff',
-    inkOnGold: '#04141a',
+    gold: '#c9ccd4',
+    goldDark: '#7d828e',
+    goldLight: '#e9ebf0',
+    inkOnGold: '#14161a',
 
     // Neutrals (cool near-black — lets the character colors breathe)
-    background: '#080b11',
-    surface: '#111721',
-    surfaceElevated: '#161e2b',
-    surfaceHover: '#1e2938',
-    border: 'rgba(126, 240, 255, 0.14)',
-    borderBright: 'rgba(126, 240, 255, 0.32)',
+    background: '#0e1014',
+    surface: '#171a20',
+    surfaceElevated: '#1e222b',
+    surfaceHover: '#272c37',
+    border: 'rgba(200, 210, 230, 0.10)',
+    borderBright: 'rgba(200, 210, 230, 0.22)',
 
     // Text
-    ink: '#eaf6ff',
-    inkSoft: '#9fb3c8',
-    inkFaint: '#5d6b7d',
+    ink: '#eef0f4',
+    inkSoft: '#a7adba',
+    inkFaint: '#646a76',
 
     // Semantic
-    success: '#3ddc97',
-    danger: '#ff3d68',
-    warning: '#ffb02e',
+    success: '#5da860',
+    danger: '#d9534f',
+    warning: '#e8a33d',
 
     // Tab bar
     tabBar: 'rgba(12, 14, 18, 0.97)',
-    tabActive: '#22d3ee',
+    tabActive: '#c9ccd4',
     tabInactive: '#646a76',
   },
   role: roleColors,
   gradients: {
-    gold: ['#0e7490', '#22d3ee'] as [string, string],
-    table: ['#0c1219', '#080b11'] as [string, string],
-    card: ['#161e2b', '#111721'] as [string, string],
+    gold: ['#7d828e', '#c9ccd4'] as [string, string],
+    table: ['#14171d', '#0e1014'] as [string, string],
+    card: ['#1e222b', '#171a20'] as [string, string],
   },
   radius: { xs: 6, sm: 10, md: 16, lg: 20, xl: 28, pill: 999 },
   spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 },
@@ -80,11 +79,11 @@ export const theme = {
       elevation: 4,
     },
     goldGlow: {
-      shadowColor: '#22d3ee',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.75,
-      shadowRadius: 16,
-      elevation: 8,
+      shadowColor: '#c9ccd4',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 14,
+      elevation: 6,
     },
   },
   motion: {
