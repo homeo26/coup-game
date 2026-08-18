@@ -13,16 +13,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
+  Easing,
   FadeIn,
   FadeInDown,
   FadeOut,
   FlipInEasyY,
   LinearTransition,
   SlideInDown,
+  SlideOutDown,
   ZoomIn,
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withTiming,
@@ -257,14 +260,24 @@ function TableSeat({
     wasTurn.current = isTurn;
   }, [isTurn, nudge]);
 
-  // Smooth turn hand-off: a glow ring that fades between seats
+  // Smooth turn hand-off: a glow ring that fades between seats and
+  // BREATHES while the turn is held — impossible to lose track of.
   const turnSv = useSharedValue(isTurn ? 1 : 0);
+  const pulse = useSharedValue(0);
   useEffect(() => {
     turnSv.value = withTiming(isTurn ? 1 : 0, { duration: 550 });
-  }, [isTurn, turnSv]);
+    if (isTurn) {
+      pulse.value = 0;
+      pulse.value = withRepeat(
+        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        -1,
+        true,
+      );
+    }
+  }, [isTurn, turnSv, pulse]);
   const ringStyle = useAnimatedStyle(() => ({
-    opacity: turnSv.value,
-    transform: [{ scale: nudge.value }],
+    opacity: turnSv.value * (0.55 + 0.45 * pulse.value),
+    transform: [{ scale: nudge.value * (1 + 0.08 * pulse.value * turnSv.value) }],
   }));
   const nudgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: nudge.value }] }));
 
@@ -332,8 +345,14 @@ function TableSeat({
             </View>
           ) : null}
         </Animated.View>
-        <View style={[styles.seatNameChip, dead && { opacity: 0.6 }]}>
-          <Text style={styles.seatNameText} numberOfLines={1}>
+        <View
+          style={[
+            styles.seatNameChip,
+            isTurn && styles.seatNameChipTurn,
+            dead && { opacity: 0.6 },
+          ]}
+        >
+          <Text style={[styles.seatNameText, isTurn && styles.seatNameTextTurn]} numberOfLines={1}>
             {p.name}
           </Text>
         </View>
@@ -355,6 +374,32 @@ function TableSeat({
         </Animated.View>
       ) : null}
     </View>
+  );
+}
+
+/** A face-down card sails from the loser's seat to the discard piles. */
+function FlyingCard({
+  from,
+  to,
+}: {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+}) {
+  const styles = useStyles(makeStyles);
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withTiming(1, { duration: 520, easing: Easing.inOut(Easing.cubic) });
+  }, [t]);
+  const st = useAnimatedStyle(() => ({
+    left: from.x + (to.x - from.x) * t.value,
+    top: from.y + (to.y - from.y) * t.value - Math.sin(t.value * Math.PI) * 40,
+    opacity: 1 - Math.max(0, t.value - 0.75) * 4,
+    transform: [{ rotate: `${t.value * 200}deg` }, { scale: 1 - 0.3 * t.value }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[styles.flyingCard, st]}>
+      <View style={styles.flyingCardFace} />
+    </Animated.View>
   );
 }
 
@@ -479,6 +524,8 @@ export function GameScreen() {
   const [deckOpen, setDeckOpen] = useState(false);
   const [sheetH, setSheetH] = useState(0);
   const [myAreaH, setMyAreaH] = useState(0);
+  const [tableBox, setTableBox] = useState({ w: 0, h: 0 });
+  const [fly, setFly] = useState<{ key: number; from: { x: number; y: number } } | null>(null);
   const [banner, setBanner] = useState<{ entry: LogEntry; key: number } | null>(null);
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   void lang;
@@ -560,6 +607,23 @@ export function GameScreen() {
       } else {
         const cue = logSound(entry.key, entry.params?.r as string | undefined);
         if (cue) sound.play(cue);
+      }
+      if (entry.key === 'logLostCard' && entry.params?.a && tableBox.w > 0) {
+        // Launch a card from the loser's seat toward the discard piles.
+        const loser = g.players.find((pl) => pl.name === entry.params!.a);
+        if (loser) {
+          const opp = g.players.filter((pl) => pl.id !== myId);
+          const idx = opp.findIndex((pl) => pl.id === loser.id);
+          const anchor =
+            loser.id === myId
+              ? { x: 0.5, y: 0.64 }
+              : SEAT_ANCHORS[opp.length]?.[idx] ?? { x: 0.5, y: 0.3 };
+          setFly({
+            key: logLen,
+            from: { x: anchor.x * tableBox.w - 17, y: anchor.y * tableBox.h + 40 },
+          });
+          setTimeout(() => setFly((f) => (f?.key === logLen ? null : f)), 600);
+        }
       }
       setBanner({ entry, key: logLen });
       const timer = setTimeout(() => setBanner((b) => (b?.key === logLen ? null : b)), 2100);
@@ -975,6 +1039,9 @@ export function GameScreen() {
       {/* The table: green felt, silver rim, seats around the edge, the
           Court and the event banner at its center — a real card table. */}
       <Animated.View
+        onLayout={(e) =>
+          setTableBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
+        }
         layout={LinearTransition.duration(260)}
         style={[
           styles.tableArea,
@@ -985,7 +1052,7 @@ export function GameScreen() {
       >
         <View style={styles.tableRimOuter}>
           <LinearGradient
-            colors={['#2e5c41', '#1f4630', '#173423']}
+            colors={['#6b2a28', '#54201e', '#3d1615']}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={styles.felt}
@@ -1052,6 +1119,13 @@ export function GameScreen() {
           />
           </Animated.View>
         ))}
+        {fly ? (
+          <FlyingCard
+            key={fly.key}
+            from={fly.from}
+            to={{ x: tableBox.w * 0.5 - 17, y: tableBox.h * 0.40 }}
+          />
+        ) : null}
         {/* me, seated at the bottom of the table — my cards face-up so
             I always see what I hold, even with the sheet open */}
         <TableSeat
@@ -1116,7 +1190,8 @@ export function GameScreen() {
       {needsMe && g.phase !== 'game_over' ? (
         <Animated.View
           key={`sheet-${g.phase}`}
-          entering={SlideInDown.duration(320)}
+          entering={SlideInDown.duration(320).easing(Easing.out(Easing.cubic))}
+          exiting={SlideOutDown.duration(240).easing(Easing.in(Easing.cubic))}
           style={styles.sheet}
           onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
         >
@@ -1320,8 +1395,8 @@ const makeStyles = (theme: Theme) =>
       flex: 1,
       borderRadius: 91,
       borderWidth: 2,
-      borderColor: '#0f2418',
-      backgroundColor: '#1f4630',
+      borderColor: '#2a0f0e',
+      backgroundColor: '#54201e',
       overflow: 'hidden',
       alignItems: 'center',
       justifyContent: 'center',
@@ -1340,6 +1415,18 @@ const makeStyles = (theme: Theme) =>
       alignItems: 'center',
       gap: 10,
       maxWidth: '72%',
+    },
+    flyingCard: {
+      position: 'absolute',
+      zIndex: 30,
+    },
+    flyingCardFace: {
+      width: 34,
+      height: 48,
+      borderRadius: 5,
+      backgroundColor: '#232733',
+      borderWidth: 1.5,
+      borderColor: theme.colors.goldDark,
     },
     centerRow: {
       flexDirection: 'row',
@@ -1461,6 +1548,13 @@ const makeStyles = (theme: Theme) =>
       fontSize: 11,
       fontFamily: font('bold'),
       color: theme.colors.ink,
+    },
+    seatNameChipTurn: {
+      backgroundColor: theme.colors.gold,
+      borderColor: theme.colors.goldLight,
+    },
+    seatNameTextTurn: {
+      color: theme.colors.inkOnGold,
     },
     deadLabel: {
       fontSize: 9,

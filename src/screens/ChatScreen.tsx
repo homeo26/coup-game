@@ -73,7 +73,7 @@ export function ChatScreen() {
           data={messages}
           keyExtractor={(m) => `${m.u}-${m.ts}`}
           contentContainerStyle={styles.list}
-          itemLayoutAnimation={LinearTransition.duration(220)}
+          itemLayoutAnimation={LinearTransition.springify().damping(18).stiffness(160)}
           renderItem={({ item, index }) => {
             const mine = item.u === myId;
             const isEmote = item.k === 'emote';
@@ -81,7 +81,11 @@ export function ChatScreen() {
             // older rows shift down via the layout transition.
             return (
               <Animated.View
-                entering={index === 0 ? FadeInUp.duration(280) : FadeInDown.duration(200)}
+                entering={
+                  index === 0
+                    ? FadeInUp.springify().damping(16).stiffness(150).mass(0.7)
+                    : FadeInDown.duration(200)
+                }
                 style={[
                   styles.msgRow,
                   (rtl ? !mine : mine) && styles.msgRowMine,

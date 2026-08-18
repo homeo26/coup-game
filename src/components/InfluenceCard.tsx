@@ -49,19 +49,24 @@ export function InfluenceCard({ role, dead, width = 96, selected, tilt = 0 }: Pr
   const height = Math.round(width * 1.42);
   const faceUp = role !== undefined;
 
-  // Turn-over: when the card first becomes face-up (opponent reveal) or
-  // first becomes dead, play a calm half-flip.
+  // Turn-over: when the card first becomes face-up (opponent reveal),
+  // first becomes dead, or CHANGES ROLE (exchange keep / proven-claim
+  // replacement drawing a new card), play a calm half-flip.
   const prevFace = useRef(faceUp);
   const prevDead = useRef(dead);
+  const prevRole = useRef(role);
   const flip = useSharedValue(0);
   useEffect(() => {
-    if ((faceUp && !prevFace.current) || (dead && !prevDead.current)) {
+    const roleChanged =
+      faceUp && prevFace.current && prevRole.current !== undefined && prevRole.current !== role;
+    if ((faceUp && !prevFace.current) || (dead && !prevDead.current) || roleChanged) {
       flip.value = 1;
       flip.value = withTiming(0, { duration: 380 });
     }
     prevFace.current = faceUp;
     prevDead.current = dead;
-  }, [faceUp, dead, flip]);
+    prevRole.current = role;
+  }, [faceUp, dead, role, flip]);
   const anim = useAnimatedStyle(() => ({
     transform: [
       { perspective: 900 },
