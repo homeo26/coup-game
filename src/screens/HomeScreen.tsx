@@ -25,10 +25,6 @@ import Animated, {
   FadeInDown,
   FadeOut,
   LinearTransition,
-  SlideInLeft,
-  SlideInRight,
-  SlideOutLeft,
-  SlideOutRight,
   ZoomIn,
   useAnimatedStyle,
   useSharedValue,
@@ -54,6 +50,10 @@ import * as sound from '../sound';
 const TIPS: TKey[] = ['tip1', 'tip2', 'tip3', 'tip4', 'tip5'];
 
 type Panel = 'join' | 'offline' | null;
+
+/** Both tile panels share one fixed-height slot, so switching never
+ *  re-lays out the screen (which looked like the widget being torn). */
+const PANEL_H = 132;
 
 export function HomeScreen() {
   const theme = useTheme();
@@ -179,10 +179,25 @@ export function HomeScreen() {
    * side you moved toward, and an indicator glides under the active tile.
    */
   const ORDER: Panel[] = ['join', 'offline'];
-  const dir = useRef(1);
   const [rowW, setRowW] = useState(0);
   const indicator = useSharedValue(0); // 0 = join, 1 = offline
   const indicatorShown = useSharedValue(0);
+  /** 0 = join panel, 1 = offline panel; `shown` opens the slot. */
+  const slide = useSharedValue(0);
+  const shown = useSharedValue(0);
+  const joinStyle = useAnimatedStyle(() => ({
+    opacity: (1 - slide.value) * shown.value,
+    transform: [{ translateX: -slide.value * 60 }],
+  }));
+  const offlineStyle = useAnimatedStyle(() => ({
+    opacity: slide.value * shown.value,
+    transform: [{ translateX: (1 - slide.value) * 60 }],
+  }));
+  const slotStyle = useAnimatedStyle(() => ({
+    height: shown.value * PANEL_H,
+    marginTop: shown.value * 14,
+    opacity: shown.value,
+  }));
   const indicatorStyle = useAnimatedStyle(() => {
     const half = Math.max(0, (rowW - 12) / 2);
     return {
@@ -198,13 +213,14 @@ export function HomeScreen() {
     setPanel((cur) => {
       const next = cur === p ? null : p;
       if (next) {
-        const from = cur ? ORDER.indexOf(cur) : ORDER.indexOf(next);
         const to = ORDER.indexOf(next);
-        dir.current = to >= from ? 1 : -1;
         indicator.value = withSpring(to, { damping: 18, stiffness: 170 });
         indicatorShown.value = withTiming(1, { duration: 160 });
+        slide.value = withSpring(to, { damping: 20, stiffness: 180 });
+        shown.value = withTiming(1, { duration: 220 });
       } else {
         indicatorShown.value = withTiming(0, { duration: 160 });
+        shown.value = withTiming(0, { duration: 200 });
       }
       return next;
     });
@@ -317,82 +333,71 @@ export function HomeScreen() {
           </Animated.View>
 
           {/* ---------- the selected tile's controls ---------- */}
-          <Animated.View
-            layout={LinearTransition.springify().damping(20).stiffness(160)}
-            style={styles.panelWrap}
-          >
-            {panel === 'join' ? (
-              <Animated.View
-                key="join"
-                entering={(dir.current > 0 ? SlideInRight : SlideInLeft).duration(260)}
-                exiting={(dir.current > 0 ? SlideOutLeft : SlideOutRight).duration(200)}
-                style={[styles.panelBox, { borderColor: roleColors.captain + '55' }]}
-              >
-                <View style={[styles.joinRow, rtl && styles.rowReverse]}>
-                  <TextInput
-                    value={codeInput}
-                    onChangeText={(v) =>
-                      setCodeInput(v.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 4))
-                    }
-                    placeholder="ABCD"
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    placeholderTextColor={theme.colors.inkFaint}
-                    style={styles.codeInput}
-                    maxLength={4}
-                    returnKeyType="go"
-                    onSubmitEditing={() => onJoin()}
-                  />
-                  <Pressy
-                    scaleTo={0.94}
-                    style={[styles.goBtn, (busy || working !== null) && styles.btnDisabled]}
-                    onPress={() => onJoin()}
-                    disabled={busy || working !== null}
-                  >
-                    <Text style={styles.goBtnText}>{working === 'join' ? '…' : t('join')}</Text>
-                  </Pressy>
-                </View>
-              </Animated.View>
-            ) : panel === 'offline' ? (
-              <Animated.View
-                key="offline"
-                entering={(dir.current > 0 ? SlideInRight : SlideInLeft).duration(260)}
-                exiting={(dir.current > 0 ? SlideOutLeft : SlideOutRight).duration(200)}
-                style={[styles.panelBox, { borderColor: roleColors.ambassador + '55' }]}
-              >
-                <View style={[styles.botRow, rtl && styles.rowReverse]}>
-                  <Text style={[styles.botLabel, rtl && styles.rtlText]}>{t('botCount')}</Text>
-                  <View style={[styles.botChips, rtl && styles.rowReverse]}>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Pressy
-                        key={n}
-                        scaleTo={0.9}
-                        style={[styles.botChip, botCount === n && styles.botChipSel]}
-                        onPress={() => {
-                          haptics.selection();
-                          sound.play('select');
-                          setBotCount(n);
-                        }}
-                      >
-                        <Text
-                          style={[styles.botChipText, botCount === n && styles.botChipTextSel]}
-                        >
-                          {n}
-                        </Text>
-                      </Pressy>
-                    ))}
-                  </View>
-                </View>
+          <Animated.View style={[styles.panelSlot, slotStyle]} pointerEvents={panel ? 'auto' : 'none'}>
+            <Animated.View
+              style={[styles.panelBox, { borderColor: roleColors.captain + '55' }, joinStyle]}
+              pointerEvents={panel === 'join' ? 'auto' : 'none'}
+            >
+              <View style={[styles.joinRow, rtl && styles.rowReverse]}>
+                <TextInput
+                  value={codeInput}
+                  onChangeText={(v) =>
+                    setCodeInput(v.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 4))
+                  }
+                  placeholder="ABCD"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  placeholderTextColor={theme.colors.inkFaint}
+                  style={styles.codeInput}
+                  maxLength={4}
+                  returnKeyType="go"
+                  onSubmitEditing={() => onJoin()}
+                />
                 <Pressy
-                  scaleTo={0.96}
-                  style={[styles.goWide, (busy || working !== null) && styles.btnDisabled]}
-                  onPress={onPlayBots}
+                  scaleTo={0.94}
+                  style={[styles.goBtn, (busy || working !== null) && styles.btnDisabled]}
+                  onPress={() => onJoin()}
                   disabled={busy || working !== null}
                 >
-                  <Text style={styles.goBtnText}>{t('playVsBots')}</Text>
+                  <Text style={styles.goBtnText}>{working === 'join' ? '…' : t('join')}</Text>
                 </Pressy>
-              </Animated.View>
-            ) : null}
+              </View>
+            </Animated.View>
+
+            <Animated.View
+              style={[styles.panelBox, { borderColor: roleColors.ambassador + '55' }, offlineStyle]}
+              pointerEvents={panel === 'offline' ? 'auto' : 'none'}
+            >
+              <View style={[styles.botRow, rtl && styles.rowReverse]}>
+                <Text style={[styles.botLabel, rtl && styles.rtlText]}>{t('botCount')}</Text>
+                <View style={[styles.botChips, rtl && styles.rowReverse]}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Pressy
+                      key={n}
+                      scaleTo={0.9}
+                      style={[styles.botChip, botCount === n && styles.botChipSel]}
+                      onPress={() => {
+                        haptics.selection();
+                        sound.play('select');
+                        setBotCount(n);
+                      }}
+                    >
+                      <Text style={[styles.botChipText, botCount === n && styles.botChipTextSel]}>
+                        {n}
+                      </Text>
+                    </Pressy>
+                  ))}
+                </View>
+              </View>
+              <Pressy
+                scaleTo={0.96}
+                style={[styles.goWide, (busy || working !== null) && styles.btnDisabled]}
+                onPress={onPlayBots}
+                disabled={busy || working !== null}
+              >
+                <Text style={styles.goBtnText}>{t('playVsBots')}</Text>
+              </Pressy>
+            </Animated.View>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -520,13 +525,19 @@ const makeStyles = (theme: Theme) =>
     tileActive: { backgroundColor: theme.colors.surfaceHover },
     tileText: { fontSize: 12.5, fontFamily: font('bold'), color: theme.colors.ink },
 
-    panelWrap: { marginTop: 14, overflow: 'hidden' },
+    panelSlot: { overflow: 'hidden' },
     panelBox: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 0,
+      height: PANEL_H,
       backgroundColor: theme.colors.surface,
       borderRadius: theme.radius.md,
       borderWidth: 1.5,
       padding: 12,
       gap: 10,
+      justifyContent: 'center',
     },
     joinRow: { flexDirection: 'row', gap: 10 },
     codeInput: {
