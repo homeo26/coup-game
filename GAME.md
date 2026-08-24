@@ -221,8 +221,9 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   standings** (1st = winner, then reverse elimination order; host gets
   Play-again).
 - Motion: every interactive element uses press feedback (scale+fade);
-  every new game event floats an animated **banner in the free table
-  space** (never covering player rows) and re-animates the log strip;
+  every new game event floats an animated **banner over the table** —
+  rendered as the last child of the table with a high zIndex/elevation so
+  it always sits ABOVE seats, card fans and the Court and re-animates the log strip;
   coin counts pulse on change; the turn glow **fades between seats**
   (border tint + halo ease in/out, small scale nudge on the new turn
   holder); panels cross-fade per turn/phase.
@@ -246,6 +247,11 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   influence", Contessa "blocks the assassination" (played on the claim,
   bluffs included). Five different speakers, each with its own register
   and room (scripts/gen-voices.sh).
+- **Sound cues**: coins, card deal/turn-up, claim, block, challenge,
+  caught bluff, coup hit, assassination, exchange shuffle, elimination,
+  win/lose, your-turn chime, response-sheet whoosh, action select,
+  cancel, rejected move, coins lost, emote pop, lobby join, chat ping —
+  plus the five character voices.
 - **Audio robustness**: SFX play in iOS silent mode (the in-app toggles
   are the mute control), mix rather than fight for focus, every player
   is preloaded at startup, a swallowed first play is retried, and a

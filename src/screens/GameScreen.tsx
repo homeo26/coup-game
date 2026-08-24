@@ -160,11 +160,13 @@ function logSound(key: string, role?: string): sound.SoundKey | null {
       return 'challenge';
     case 'logChallengeFailed':
     case 'logChallengeWon':
-    case 'logLostCard':
       return 'fail';
     case 'logCoup':
+      return 'coupHit';
     case 'logAssassinate':
       return 'kill';
+    case 'logLostCard':
+      return 'reveal';
     case 'logEliminated':
     case 'logForfeit':
       return 'lose';
@@ -615,6 +617,11 @@ export function GameScreen() {
     const timer = setInterval(() => setEmoteTick((x) => x + 1), 1200);
     return () => clearInterval(timer);
   }, [emotes.size]);
+  const prevEmotes = useRef(0);
+  useEffect(() => {
+    if (emotes.size > prevEmotes.current) sound.play('emote');
+    prevEmotes.current = emotes.size;
+  }, [emotes.size]);
   const avatarOf = (id: string) => room?.roster.find((r) => r.id === id)?.avatar;
 
   // Derivations (safe even while g flickers during snapshots)
@@ -633,10 +640,20 @@ export function GameScreen() {
   useEffect(() => {
     if (needsMe && !needed.current) {
       haptics.medium();
-      sound.play('turn');
+      sound.play(isMyTurn ? 'turn' : 'sheet');
     }
     needed.current = needsMe;
-  }, [needsMe]);
+  }, [needsMe, isMyTurn]);
+
+  // coins leaving my pile (a steal, a coup, an assassin's fee)
+  const myCoins = me?.coins;
+  const prevCoins = useRef(myCoins);
+  useEffect(() => {
+    if (prevCoins.current !== undefined && myCoins !== undefined && myCoins < prevCoins.current) {
+      sound.play('coinLoss');
+    }
+    prevCoins.current = myCoins;
+  }, [myCoins]);
 
   // Reset transient selections when the phase moves on
   useEffect(() => {
@@ -724,7 +741,10 @@ export function GameScreen() {
       haptics.light();
       sound.play('tap');
       const err = await move(m);
-      if (err) console.log('move rejected:', err);
+      if (err) {
+        sound.play('error');
+        console.log('move rejected:', err);
+      }
     } catch {
       setNotice({ icon: 'cloud-offline-outline', title: t('appName'), body: t('offline') });
     } finally {
@@ -741,6 +761,7 @@ export function GameScreen() {
 
   const selectAction = (action: ActionType) => {
     haptics.selection();
+    sound.play('select');
     setSelTarget(null);
     setSelAction((prev) => (prev === action ? null : action));
   };
@@ -892,6 +913,7 @@ export function GameScreen() {
               scaleTo={0.97}
               style={styles.cancelLink}
               onPress={() => {
+                sound.play('cancel');
                 setSelAction(null);
                 setSelTarget(null);
               }}
@@ -1164,27 +1186,6 @@ export function GameScreen() {
                 </View>
                 <DiscardPiles g={g} />
               </View>
-              {banner && g.phase !== 'game_over' ? (
-                <Animated.View
-                  key={banner.key}
-                  entering={FadeInDown.duration(300)}
-                  exiting={FadeOut.duration(350)}
-                  style={[
-                    styles.bannerCard,
-                    rtl && styles.rowReverse,
-                    { borderColor: logMeta(banner.entry, theme).color + '77' },
-                  ]}
-                >
-                  <Ionicons
-                    name={logMeta(banner.entry, theme).icon}
-                    size={15}
-                    color={logMeta(banner.entry, theme).color}
-                  />
-                  <Text style={[styles.bannerText, rtl && styles.rtlText]} numberOfLines={2}>
-                    {formatLog(banner.entry)}
-                  </Text>
-                </Animated.View>
-              ) : null}
             </View>
           </LinearGradient>
         </View>
@@ -1223,6 +1224,34 @@ export function GameScreen() {
             duration={430}
           />
         ))}
+        {/* event banner: last child + high zIndex, so it always floats
+            ABOVE the seats and their card fans */}
+        {banner && g.phase !== 'game_over' ? (
+          <Animated.View
+            key={banner.key}
+            entering={FadeInDown.duration(300)}
+            exiting={FadeOut.duration(350)}
+            pointerEvents="none"
+            style={styles.bannerWrap}
+          >
+            <View
+              style={[
+                styles.bannerCard,
+                rtl && styles.rowReverse,
+                { borderColor: logMeta(banner.entry, theme).color + '77' },
+              ]}
+            >
+              <Ionicons
+                name={logMeta(banner.entry, theme).icon}
+                size={15}
+                color={logMeta(banner.entry, theme).color}
+              />
+              <Text style={[styles.bannerText, rtl && styles.rtlText]} numberOfLines={2}>
+                {formatLog(banner.entry)}
+              </Text>
+            </View>
+          </Animated.View>
+        ) : null}
         {fly ? (
           <FlyingCard
             key={fly.key}
@@ -1693,6 +1722,15 @@ const makeStyles = (theme: Theme) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
+    },
+    bannerWrap: {
+      position: 'absolute',
+      left: 16,
+      right: 16,
+      top: '52%',
+      alignItems: 'center',
+      zIndex: 60,
+      elevation: 12,
     },
     bannerCard: {
       flexDirection: 'row',

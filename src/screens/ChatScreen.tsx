@@ -56,7 +56,7 @@ export function ChatScreen() {
   const send = (k: 'text' | 'emote' | 'taunt', v: string) => {
     if (!v.trim()) return;
     haptics.selection();
-    sound.play('tap');
+    sound.play(k === 'text' ? 'tap' : 'emote');
     sendChat({ n: me?.name ?? '?', a: me?.avatar, k, v: v.trim() });
   };
 

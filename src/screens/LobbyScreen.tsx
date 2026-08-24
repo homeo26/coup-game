@@ -2,7 +2,7 @@
  * LobbyScreen — waiting room: big shareable code, live roster, and the
  * start button for the host (2–6 players).
  */
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -17,6 +17,7 @@ import { useSettings } from '../settings';
 import { t, isRTL } from '../i18n';
 import { MIN_PLAYERS } from '../engine/engine';
 import * as haptics from '../haptics';
+import * as sound from '../sound';
 
 export function LobbyScreen() {
   const theme = useTheme();
@@ -26,6 +27,14 @@ export function LobbyScreen() {
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   const [starting, setStarting] = useState(false);
   void lang;
+
+  // a friend walking into the room gets a little chime
+  const seats = room?.roster.length ?? 0;
+  const prevSeats = useRef(seats);
+  useEffect(() => {
+    if (seats > prevSeats.current) sound.play('join');
+    prevSeats.current = seats;
+  }, [seats]);
 
   if (!room) return null;
   const isHost = room.hostId === myId;

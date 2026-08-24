@@ -25,6 +25,15 @@ const SOURCES = {
   lose: require('../assets/sounds/lose.m4a'), // eliminated
   tap: require('../assets/sounds/tap.m4a'), // confirm press
   chat: require('../assets/sounds/chat.m4a'), // incoming chat message
+  select: require('../assets/sounds/select.m4a'), // action row picked
+  cancel: require('../assets/sounds/cancel.m4a'), // selection dropped
+  sheet: require('../assets/sounds/sheet.m4a'), // response sheet rises
+  coinLoss: require('../assets/sounds/coinLoss.m4a'), // coins taken from me
+  coupHit: require('../assets/sounds/coupHit.m4a'), // a coup lands
+  reveal: require('../assets/sounds/reveal.m4a'), // a card turned face up
+  join: require('../assets/sounds/join.m4a'), // player joined the lobby
+  error: require('../assets/sounds/error.m4a'), // rules rejected the move
+  emote: require('../assets/sounds/emote.m4a'), // emote / taunt
   // Character voice stingers (Piper TTS, processed): played when the
   // character is claimed for an action (or the Contessa blocks).
   voiceDuke: require('../assets/sounds/roles/duke.m4a'),
@@ -57,7 +66,7 @@ export type SoundKey = keyof typeof SOURCES;
 const pools = new Map<SoundKey, { players: AudioPlayer[]; next: number }>();
 const lru: SoundKey[] = [];
 const MAX_POOLS = 6;
-const DOUBLE: SoundKey[] = ['tap', 'coins', 'card', 'chat'];
+const DOUBLE: SoundKey[] = ['tap', 'coins', 'card', 'select'];
 let audioModeSet = false;
 
 function makePlayer(key: SoundKey): AudioPlayer {
