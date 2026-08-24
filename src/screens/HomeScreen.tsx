@@ -16,11 +16,21 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { Theme, font, latinFont, roleColors, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
 import { Breathing } from '../components/Breathing';
 import { ANIMALS, Avatar } from '../components/Avatar';
+import { HeroFan } from '../components/HeroFan';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useSettings } from '../settings';
 import * as Linking from 'expo-linking';
@@ -28,6 +38,9 @@ import { useRoom } from '../net/RoomContext';
 import { consumePendingJoin, onPendingJoin, parseJoinCode } from '../net/deeplink';
 import { t, TKey, isRTL } from '../i18n';
 import * as haptics from '../haptics';
+
+/** Rotating one-liners under the hero: flavour plus a rules nudge. */
+const TIPS: TKey[] = ['tip1', 'tip2', 'tip3', 'tip4', 'tip5'];
 
 export function HomeScreen() {
   const theme = useTheme();
@@ -138,6 +151,27 @@ export function HomeScreen() {
 
   const rtl = isRTL();
 
+  // a slowly rotating tip keeps the screen alive and teaches the rules
+  const [tipIndex, setTipIndex] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTipIndex((i) => (i + 1) % TIPS.length), 4200);
+    return () => clearInterval(id);
+  }, []);
+
+  // the primary action breathes so the screen never looks static
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+  }, [pulse]);
+  const ctaStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + pulse.value * 0.018 }],
+    shadowOpacity: 0.35 + pulse.value * 0.4,
+  }));
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       {/* neon-cyborg backdrop (scripts/gen-bg.py) + slow character wash */}
@@ -163,6 +197,16 @@ export function HomeScreen() {
               resizeMode="contain"
             />
             <Text style={styles.tag}>{t('homeTag')}</Text>
+            {/* the cast, fanned out — tap a card to hear the character */}
+            <HeroFan />
+            <Animated.Text
+              key={tipIndex}
+              entering={FadeIn.duration(500)}
+              exiting={FadeOut.duration(400)}
+              style={styles.tip}
+            >
+              {t(TIPS[tipIndex])}
+            </Animated.Text>
             {/* pick your animal avatar */}
             <Text style={styles.avatarLabel}>{t('avatarLabel')}</Text>
             <View style={styles.cast}>
@@ -208,17 +252,19 @@ export function HomeScreen() {
               returnKeyType="done"
             />
 
-            <Pressy
-              scaleTo={0.96}
-              style={[styles.primaryBtn, (busy || working !== null) && styles.btnDisabled]}
-              onPress={onCreate}
-              disabled={busy || working !== null}
-            >
-              <Ionicons name="add-circle" size={22} color={theme.colors.inkOnGold} />
-              <Text style={styles.primaryBtnText}>
-                {working === 'create' ? '…' : t('createGame')}
-              </Text>
-            </Pressy>
+            <Animated.View style={ctaStyle}>
+              <Pressy
+                scaleTo={0.96}
+                style={[styles.primaryBtn, (busy || working !== null) && styles.btnDisabled]}
+                onPress={onCreate}
+                disabled={busy || working !== null}
+              >
+                <Ionicons name="add-circle" size={22} color={theme.colors.inkOnGold} />
+                <Text style={styles.primaryBtnText}>
+                  {working === 'create' ? '…' : t('createGame')}
+                </Text>
+              </Pressy>
+            </Animated.View>
           </Animated.View>
 
           <Animated.View
@@ -318,6 +364,16 @@ const makeStyles = (theme: Theme) =>
       fontFamily: font('semibold'),
       color: theme.colors.inkSoft,
       marginTop: -6,
+    },
+    tip: {
+      fontSize: 12.5,
+      fontFamily: font('semibold'),
+      color: theme.colors.goldLight,
+      textAlign: 'center',
+      marginTop: 2,
+      marginBottom: 2,
+      paddingHorizontal: 12,
+      minHeight: 34,
     },
     cast: {
       flexDirection: 'row',

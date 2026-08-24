@@ -19,6 +19,23 @@ export const dict = {
   // Home
   homeTitle: { en: 'COUP', ar: 'COUP' },
   homeTag: { en: 'Bluff. Challenge. Survive.', ar: 'خادِع. تحدَّ. انجُ.' },
+  tip1: {
+    en: 'Claim any character — even one you don’t hold.',
+    ar: 'ادّعِ أي شخصية — حتى لو لم تكن بيدك.',
+  },
+  tip2: {
+    en: 'Anyone at the table may challenge a claim.',
+    ar: 'أي لاعب على الطاولة يمكنه تحدّي الادعاء.',
+  },
+  tip3: {
+    en: 'Only the target can block a steal or an assassination.',
+    ar: 'الهدف وحده يمكنه صدّ السرقة أو الاغتيال.',
+  },
+  tip4: { en: 'Ten coins and you must launch a Coup.', ar: 'عشر عملات ويجب أن تنفّذ انقلاباً.' },
+  tip5: {
+    en: 'Two influence cards. Lose both and you’re out.',
+    ar: 'بطاقتا نفوذ. اخسرهما وتخرج من اللعبة.',
+  },
   yourName: { en: 'Your name', ar: 'اسمك' },
   createGame: { en: 'Create game', ar: 'إنشاء لعبة' },
   joinGame: { en: 'Join game', ar: 'الانضمام إلى لعبة' },

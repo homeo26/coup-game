@@ -231,6 +231,13 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
 
 - Three always-mounted tabs (Play / Rules / More) in a pager; the Play
   tab morphs Home → Lobby → Game table with the room status.
+- Home is a showpiece rather than a form: the coin mark, the five
+  character cards fanned and breathing (tap one and that character speaks
+  their line), a rotating rules tip, a pulsing primary action, and the
+  neon character-coloured backdrop.
+- Everything that appears also disappears: prompts, response buttons, the
+  countdown chip, confirm bars, action rows, modals and the win card all
+  have paired in/out animations (zoom/fade/slide).
 - The table IS a table: a green-felt, silver-rimmed rounded surface
   with opponents **seated around the rim** (1–5 seats mapped to arc
   anchors), the Court deck and event banner at its center, and your
@@ -247,10 +254,10 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   keeper, waiting states, and a game-over overlay with **ranked
   standings** (1st = winner, then reverse elimination order; host gets
   Play-again).
-- **Claim badges**: while a character claim is live (an action awaiting a
-  challenge, or a block and its challenge window) a badge with the role
-  portrait is pinned to the claiming player's seat, so the claim lives on
-  the person making it rather than only in the prompt.
+- **Claim chips**: while a character claim is live (an action awaiting a
+  challenge, or a block and its challenge window) the claiming player's
+  NAME CHIP morphs into "Name · Role" — role portrait, role colour — so
+  the claim lives on the person making it without covering their cards.
 - **Response progress**: seats show an hourglass while they owe an answer
   and a green tick once they've answered; the prompt carries an
   "{done} of {total} answered" tally.

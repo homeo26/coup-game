@@ -31,6 +31,7 @@ import Animated, {
   SlideInDown,
   SlideOutDown,
   ZoomIn,
+  ZoomOut,
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
@@ -441,30 +442,32 @@ function TableSeat({
               <Ionicons name="checkmark" size={11} color="#0d1a12" />
             </Animated.View>
           ) : null}
-          {claim ? (
-            <Animated.View
-              entering={ZoomIn.duration(260)}
-              exiting={FadeOut.duration(200)}
-              style={[styles.claimBadge, { borderColor: roleColors[claim] }]}
-            >
-              <RolePortrait role={claim} size={22} ring={1.5} />
-              <Text style={[styles.claimBadgeText, { color: roleColors[claim] }]} numberOfLines={1}>
-                {t(claim as TKey)}
-              </Text>
-            </Animated.View>
-          ) : null}
         </Animated.View>
-        <View
+        <Animated.View
+          layout={LinearTransition.duration(220)}
           style={[
             styles.seatNameChip,
-            isTurn && styles.seatNameChipTurn,
+            isTurn && !claim && styles.seatNameChipTurn,
+            claim && { borderColor: roleColors[claim], backgroundColor: 'rgba(6,8,12,0.96)' },
             dead && { opacity: 0.6 },
           ]}
         >
-          <Text style={[styles.seatNameText, isTurn && styles.seatNameTextTurn]} numberOfLines={1}>
-            {p.name}
+          {claim ? (
+            <Animated.View entering={ZoomIn.duration(200)} exiting={FadeOut.duration(160)}>
+              <RolePortrait role={claim} size={15} ring={1} />
+            </Animated.View>
+          ) : null}
+          <Text
+            style={[
+              styles.seatNameText,
+              isTurn && !claim && styles.seatNameTextTurn,
+              claim && { color: roleColors[claim] },
+            ]}
+            numberOfLines={1}
+          >
+            {claim ? `${p.name} · ${t(claim as TKey)}` : p.name}
           </Text>
-        </View>
+        </Animated.View>
         {dead ? (
           <Text style={styles.deadLabel}>{t('eliminated')}</Text>
         ) : (
@@ -622,7 +625,7 @@ function DeckTracker({ g, onClose }: { g: GameState; onClose: () => void }) {
   );
   return (
     <View style={styles.logModalBackdrop}>
-      <View style={styles.logModal}>
+      <Animated.View entering={ZoomIn.duration(240)} style={styles.logModal}>
         <Text style={styles.panelTitle}>{t('deckTrackerTitle')}</Text>
         <Text style={[styles.deckSummary, rtl && styles.rtlText]}>
           {t('deckTrackerSummary', { court: g.deck.length, hands: hiddenInHands })}
@@ -664,7 +667,7 @@ function DeckTracker({ g, onClose }: { g: GameState; onClose: () => void }) {
         <Pressy scaleTo={0.95} style={styles.neutralBtn} onPress={onClose}>
           <Text style={styles.neutralBtnText}>{t('ok')}</Text>
         </Pressy>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -1046,7 +1049,12 @@ export function GameScreen() {
             const isBluff = !!role && !myRoles.includes(role);
             const color = role ? roleColors[role] : a === 'coup' ? theme.colors.danger : theme.colors.gold;
             return (
-              <Animated.View key={a} entering={FadeIn.duration(180)} layout={LinearTransition.duration(220)}>
+              <Animated.View
+                key={a}
+                entering={FadeIn.duration(180)}
+                exiting={FadeOut.duration(140)}
+                layout={LinearTransition.duration(220)}
+              >
               <Pressy
                 scaleTo={0.96}
                 disabled={disabled}
@@ -1096,7 +1104,11 @@ export function GameScreen() {
           </Animated.View>
         </ScrollView>
         {sel ? (
-          <Animated.View entering={FadeIn.duration(160)} style={styles.confirmArea}>
+          <Animated.View
+            entering={FadeInDown.duration(200)}
+            exiting={FadeOut.duration(150)}
+            style={styles.confirmArea}
+          >
             {sel.role && !myRoles.includes(sel.role) ? (
               <Text style={styles.bluffHint}>{t('bluffHint')}</Text>
             ) : null}
@@ -1169,9 +1181,13 @@ export function GameScreen() {
         </Text>
         <View style={[styles.btnRow, rtl && styles.rowReverse]}>
           {g.phase === 'block' ? (
-            blockRoles.map((r) => (
-              <Pressy
+            blockRoles.map((r, bi) => (
+              <Animated.View
                 key={r}
+                entering={ZoomIn.duration(240).delay(bi * 70)}
+                exiting={ZoomOut.duration(150)}
+              >
+              <Pressy
                 scaleTo={0.94}
                 disabled={sending}
                 style={[
@@ -1185,26 +1201,34 @@ export function GameScreen() {
                   {t('blockWith', { role: t(r as TKey) })}
                 </Text>
               </Pressy>
+              </Animated.View>
             ))
           ) : (
+            <Animated.View entering={ZoomIn.duration(240)} exiting={ZoomOut.duration(150)}>
+              <Pressy
+                scaleTo={0.94}
+                disabled={sending}
+                style={styles.challengeBtn}
+                onPress={() => dispatch({ type: 'challenge' })}
+              >
+                <Ionicons name="flash" size={17} color="#fff" />
+                <Text style={styles.challengeBtnText}>{t('challenge')}</Text>
+              </Pressy>
+            </Animated.View>
+          )}
+          <Animated.View
+            entering={ZoomIn.duration(240).delay(90)}
+            exiting={ZoomOut.duration(150)}
+          >
             <Pressy
               scaleTo={0.94}
               disabled={sending}
-              style={styles.challengeBtn}
-              onPress={() => dispatch({ type: 'challenge' })}
+              style={styles.neutralBtn}
+              onPress={() => dispatch({ type: 'pass' })}
             >
-              <Ionicons name="flash" size={17} color="#fff" />
-              <Text style={styles.challengeBtnText}>{t('challenge')}</Text>
+              <Text style={styles.neutralBtnText}>{t('allow')}</Text>
             </Pressy>
-          )}
-          <Pressy
-            scaleTo={0.94}
-            disabled={sending}
-            style={styles.neutralBtn}
-            onPress={() => dispatch({ type: 'pass' })}
-          >
-            <Text style={styles.neutralBtnText}>{t('allow')}</Text>
-          </Pressy>
+          </Animated.View>
         </View>
       </Animated.View>
     );
@@ -1345,7 +1369,9 @@ export function GameScreen() {
         </Pressy>
         <Text style={styles.roomCode}>{room!.code}</Text>
         {secsLeft !== null ? (
-          <View
+          <Animated.View
+            entering={ZoomIn.duration(220)}
+            exiting={ZoomOut.duration(180)}
             style={[
               styles.clockChip,
               secsLeft <= 5 && { borderColor: theme.colors.danger },
@@ -1361,7 +1387,7 @@ export function GameScreen() {
             >
               {secsLeft}
             </Text>
-          </View>
+          </Animated.View>
         ) : null}
         <Pressy
           scaleTo={0.92}
@@ -1618,7 +1644,11 @@ export function GameScreen() {
       {/* Game over — final standings */}
       {g.phase === 'game_over' && winner ? (
         <Animated.View entering={FadeIn.duration(350)} style={styles.winOverlay}>
-          <Animated.View entering={FadeInDown.duration(400).delay(120)} style={styles.winCard}>
+          <Animated.View
+            entering={FadeInDown.duration(400).delay(120)}
+            exiting={FadeOut.duration(220)}
+            style={styles.winCard}
+          >
             <Ionicons name="trophy" size={44} color={theme.colors.gold} />
             <Text style={styles.winTitle}>
               {winner.id === me.id ? t('youWin') : t('winnerIs', { name: winner.name })}
@@ -1706,7 +1736,7 @@ export function GameScreen() {
       {/* Full history — visual timeline, latest first */}
       <Modal visible={logOpen} transparent animationType="fade" onRequestClose={() => setLogOpen(false)}>
         <View style={styles.logModalBackdrop}>
-          <View style={styles.logModal}>
+          <Animated.View entering={ZoomIn.duration(240)} style={styles.logModal}>
             <FlatList
               data={[...g.log].reverse()}
               keyExtractor={(_, i) => String(i)}
@@ -1733,7 +1763,7 @@ export function GameScreen() {
             <Pressy scaleTo={0.95} style={styles.neutralBtn} onPress={() => setLogOpen(false)}>
               <Text style={styles.neutralBtnText}>{t('ok')}</Text>
             </Pressy>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -2043,26 +2073,10 @@ const makeStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    claimBadge: {
-      position: 'absolute',
-      top: -30,
+    seatNameChip: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: 6,
-      paddingRight: 9,
-      paddingVertical: 2,
-      borderRadius: theme.radius.pill,
-      borderWidth: 1.5,
-      backgroundColor: 'rgba(8,10,14,0.94)',
-      maxWidth: 132,
-      zIndex: 8,
-    },
-    claimBadgeText: {
-      fontSize: 10.5,
-      fontFamily: font('bold'),
-    },
-    seatNameChip: {
       backgroundColor: 'rgba(8, 10, 14, 0.95)',
       borderRadius: theme.radius.pill,
       paddingHorizontal: 9,
