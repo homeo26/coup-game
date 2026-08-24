@@ -29,7 +29,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import * as Linking from 'expo-linking';
@@ -81,14 +80,14 @@ export function HomeScreen() {
   const pulse = useSharedValue(0);
   useEffect(() => {
     pulse.value = withRepeat(
-      withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
+      withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.sin) }),
       -1,
       true,
     );
   }, [pulse]);
+  // glow only — a constantly scaling button reads as wobble
   const ctaStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + pulse.value * 0.016 }],
-    shadowOpacity: 0.3 + pulse.value * 0.4,
+    shadowOpacity: 0.25 + pulse.value * 0.45,
   }));
 
   const remember = () => {
@@ -187,11 +186,11 @@ export function HomeScreen() {
   const shown = useSharedValue(0);
   const joinStyle = useAnimatedStyle(() => ({
     opacity: (1 - slide.value) * shown.value,
-    transform: [{ translateX: -slide.value * 60 }],
+    transform: [{ translateX: -slide.value * 26 }],
   }));
   const offlineStyle = useAnimatedStyle(() => ({
     opacity: slide.value * shown.value,
-    transform: [{ translateX: (1 - slide.value) * 60 }],
+    transform: [{ translateX: (1 - slide.value) * 26 }],
   }));
   const slotStyle = useAnimatedStyle(() => ({
     height: shown.value * PANEL_H,
@@ -214,13 +213,14 @@ export function HomeScreen() {
       const next = cur === p ? null : p;
       if (next) {
         const to = ORDER.indexOf(next);
-        indicator.value = withSpring(to, { damping: 18, stiffness: 170 });
-        indicatorShown.value = withTiming(1, { duration: 160 });
-        slide.value = withSpring(to, { damping: 20, stiffness: 180 });
-        shown.value = withTiming(1, { duration: 220 });
+        const ease = { duration: 240, easing: Easing.out(Easing.cubic) };
+        indicator.value = withTiming(to, ease);
+        indicatorShown.value = withTiming(1, { duration: 140 });
+        slide.value = withTiming(to, ease);
+        shown.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) });
       } else {
-        indicatorShown.value = withTiming(0, { duration: 160 });
-        shown.value = withTiming(0, { duration: 200 });
+        indicatorShown.value = withTiming(0, { duration: 140 });
+        shown.value = withTiming(0, { duration: 180, easing: Easing.in(Easing.quad) });
       }
       return next;
     });

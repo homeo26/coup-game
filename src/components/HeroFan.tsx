@@ -48,7 +48,7 @@ function FanCard({
   useEffect(() => {
     breathe.value = withDelay(
       index * 260,
-      withRepeat(withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }), -1, true),
+      withRepeat(withTiming(1, { duration: 3600, easing: Easing.inOut(Easing.sin) }), -1, true),
     );
   }, [breathe, index]);
 
@@ -61,7 +61,7 @@ function FanCard({
   const anim = useAnimatedStyle(() => ({
     transform: [
       { translateX: spec.x },
-      { translateY: spec.y - breathe.value * 7 - lift.value * 26 },
+      { translateY: spec.y - breathe.value * 3.5 - lift.value * 24 },
       { rotate: `${spec.rot - lift.value * spec.rot * 0.6}deg` },
       { scale: 1 + lift.value * 0.1 },
     ],
