@@ -181,7 +181,27 @@ function logSound(key: string, role?: string): sound.SoundKey | null {
 /* Opponent seat                                                       */
 /* ------------------------------------------------------------------ */
 
-/** Coin count that pulses whenever the amount changes. */
+/** A "+3" / "-2" that drifts up and fades off a coin chip. */
+function CoinDelta({ delta }: { delta: number }) {
+  const styles = useStyles(makeStyles);
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withTiming(1, { duration: 900, easing: Easing.out(Easing.quad) });
+  }, [t]);
+  const st = useAnimatedStyle(() => ({
+    opacity: 1 - Math.max(0, t.value - 0.55) / 0.45,
+    transform: [{ translateY: -34 * t.value }, { scale: 0.85 + 0.35 * Math.min(1, t.value * 3) }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[styles.deltaWrap, st]}>
+      <Text style={[styles.deltaText, delta > 0 ? styles.deltaUp : styles.deltaDown]}>
+        {delta > 0 ? `+${delta}` : delta}
+      </Text>
+    </Animated.View>
+  );
+}
+
+/** Coin count that pulses whenever the amount changes, with a floating delta. */
 function AnimatedCoins({
   amount,
   size,
@@ -193,19 +213,25 @@ function AnimatedCoins({
 }) {
   const scale = useSharedValue(1);
   const prev = useRef(amount);
+  const [delta, setDelta] = useState<{ n: number; key: number } | null>(null);
   useEffect(() => {
     if (prev.current !== amount) {
+      const diff = amount - prev.current;
       prev.current = amount;
       scale.value = withSequence(
         withTiming(1.35, { duration: 170 }),
         withTiming(1, { duration: 260 }),
       );
+      const key = Date.now();
+      setDelta({ n: diff, key });
+      setTimeout(() => setDelta((d) => (d?.key === key ? null : d)), 950);
     }
   }, [amount, scale]);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
     <Animated.View style={st}>
       <CoinCount amount={amount} size={size} chip={chip} />
+      {delta ? <CoinDelta key={delta.key} delta={delta.n} /> : null}
     </Animated.View>
   );
 }
@@ -238,6 +264,15 @@ const SEAT_ANCHORS: Record<number, { x: number; y: number }[]> = {
 
 const SEAT_W = 104;
 
+/** Ability reminder shown when a player peeks at their own card. */
+const ROLE_BLURB: Record<Role, TKey> = {
+  duke: 'dukeBlurb',
+  assassin: 'assassinBlurb',
+  captain: 'captainBlurb',
+  ambassador: 'ambassadorBlurb',
+  contessa: 'contessaBlurb',
+};
+
 /** A seat at the table: card fan behind the avatar, name and coins
  *  below, turn glow around the face — like sitting at a real table. */
 function TableSeat({
@@ -252,6 +287,8 @@ function TableSeat({
   anchorBottom,
   showFaces,
   compact,
+  claim,
+  passed,
 }: {
   p: PlayerState;
   avatar?: string;
@@ -267,6 +304,10 @@ function TableSeat({
   showFaces?: boolean;
   /** Shrink the seat (used while the action sheet squeezes the table). */
   compact?: boolean;
+  /** Character this player is currently claiming, pinned to their seat. */
+  claim?: Role | null;
+  /** They have already answered the open response window. */
+  passed?: boolean;
 }) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
@@ -395,6 +436,22 @@ function TableSeat({
             <View style={styles.respondBadge}>
               <Ionicons name="hourglass" size={10} color={theme.colors.inkOnGold} />
             </View>
+          ) : passed ? (
+            <Animated.View entering={ZoomIn.duration(220)} style={styles.passedBadge}>
+              <Ionicons name="checkmark" size={11} color="#0d1a12" />
+            </Animated.View>
+          ) : null}
+          {claim ? (
+            <Animated.View
+              entering={ZoomIn.duration(260)}
+              exiting={FadeOut.duration(200)}
+              style={[styles.claimBadge, { borderColor: roleColors[claim] }]}
+            >
+              <RolePortrait role={claim} size={22} ring={1.5} />
+              <Text style={[styles.claimBadgeText, { color: roleColors[claim] }]} numberOfLines={1}>
+                {t(claim as TKey)}
+              </Text>
+            </Animated.View>
           ) : null}
         </Animated.View>
         <View
@@ -426,6 +483,51 @@ function TableSeat({
         </Animated.View>
       ) : null}
     </View>
+  );
+}
+
+/**
+ * A directional attack effect drawn between two seats: a coin streak for
+ * a steal, a dagger arc for an assassination, a heavy impact for a coup.
+ */
+function AttackFx({
+  kind,
+  from,
+  to,
+}: {
+  kind: 'steal' | 'assassinate' | 'coup';
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+}) {
+  const theme = useTheme();
+  const styles = useStyles(makeStyles);
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withTiming(1, { duration: kind === 'steal' ? 620 : 520, easing: Easing.inOut(Easing.cubic) });
+  }, [t, kind]);
+  const lift = kind === 'assassinate' ? 70 : 26;
+  const st = useAnimatedStyle(() => ({
+    left: from.x + (to.x - from.x) * t.value,
+    top: from.y + (to.y - from.y) * t.value - Math.sin(t.value * Math.PI) * lift,
+    opacity: t.value > 0.86 ? (1 - t.value) / 0.14 : 1,
+    transform: [
+      { scale: kind === 'coup' ? 1 + t.value * 0.6 : 1 },
+      { rotate: kind === 'assassinate' ? `${-40 + t.value * 80}deg` : '0deg' },
+    ],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[styles.fxWrap, st]}>
+      {kind === 'steal' ? (
+        <View style={styles.fxCoins}>
+          <CoinIcon size={20} />
+          <CoinIcon size={14} />
+        </View>
+      ) : kind === 'assassinate' ? (
+        <Ionicons name="flash" size={30} color={roleColors.assassin} />
+      ) : (
+        <Ionicons name="skull" size={34} color={theme.colors.danger} />
+      )}
+    </Animated.View>
   );
 }
 
@@ -467,7 +569,7 @@ function FlyingCard({
 
 /** The table graveyard: dead cards stack like solitaire foundations,
  *  one overlapping pile per character type. New kills flip in. */
-function DiscardPiles({ g }: { g: GameState }) {
+function DiscardPiles({ g, onPress }: { g: GameState; onPress?: () => void }) {
   const styles = useStyles(makeStyles);
   const CARD_W = 34;
   const CARD_H = Math.round(CARD_W * 1.42);
@@ -481,7 +583,7 @@ function DiscardPiles({ g }: { g: GameState }) {
   })).filter((x) => x.n > 0);
   if (piles.length === 0) return null;
   return (
-    <View style={styles.pilesRow}>
+    <Pressy scaleTo={0.95} onPress={onPress} style={styles.pilesRow}>
       {piles.map(({ role, n }) => (
         <View key={role} style={{ width: CARD_W, height: CARD_H + (n - 1) * STEP }}>
           {Array.from({ length: n }).map((_, i) => (
@@ -495,7 +597,7 @@ function DiscardPiles({ g }: { g: GameState }) {
           ))}
         </View>
       ))}
-    </View>
+    </Pressy>
   );
 }
 
@@ -574,7 +676,7 @@ function DeckTracker({ g, onClose }: { g: GameState; onClose: () => void }) {
 export function GameScreen() {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
-  const { height: winH } = useWindowDimensions();
+  const { width, height: winH } = useWindowDimensions();
   const { lang } = useSettings();
   const { room, myId, move, leave, again } = useRoom();
   const [selAction, setSelAction] = useState<ActionType | null>(null);
@@ -588,10 +690,21 @@ export function GameScreen() {
   const [myAreaH, setMyAreaH] = useState(0);
   const [tableBox, setTableBox] = useState({ w: 0, h: 0 });
   const [secsLeft, setSecsLeft] = useState<number | null>(null);
+  const [peek, setPeek] = useState<Role | null>(null);
   const [fly, setFly] = useState<{ key: number; from: { x: number; y: number } } | null>(null);
   const [deals, setDeals] = useState<
     { key: string; to: { x: number; y: number }; delay: number }[]
   >([]);
+  const [attack, setAttack] = useState<{
+    key: number;
+    kind: 'steal' | 'assassinate' | 'coup';
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+  } | null>(null);
+  const shake = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shake.value }, { translateY: shake.value * 0.4 }],
+  }));
   const [banner, setBanner] = useState<{ entry: LogEntry; key: number } | null>(null);
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   void lang;
@@ -624,6 +737,16 @@ export function GameScreen() {
     prevEmotes.current = emotes.size;
   }, [emotes.size]);
   const avatarOf = (id: string) => room?.roster.find((r) => r.id === id)?.avatar;
+
+  /** Centre of a player's seat inside the table box, for flying effects. */
+  const seatPoint = (id: string): { x: number; y: number } => {
+    if (!g || tableBox.w === 0) return { x: 0, y: 0 };
+    if (id === myId) return { x: tableBox.w * 0.5 - 16, y: tableBox.h * 0.74 };
+    const opp = g.players.filter((p) => p.id !== myId);
+    const i = opp.findIndex((p) => p.id === id);
+    const a = SEAT_ANCHORS[opp.length]?.[i] ?? { x: 0.5, y: 0.1 };
+    return { x: a.x * tableBox.w - 16, y: a.y * tableBox.h + 34 };
+  };
 
   // Derivations (safe even while g flickers during snapshots)
   const me = useMemo(() => g?.players.find((p) => p.id === myId), [g, myId]);
@@ -739,6 +862,36 @@ export function GameScreen() {
         const cue = logSound(entry.key, entry.params?.r as string | undefined);
         if (cue) sound.play(cue);
       }
+      // directional attack visuals
+      if (tableBox.w > 0 && entry.params?.a) {
+        const actor = g.players.find((pl) => pl.name === entry.params!.a);
+        const victim = g.players.find((pl) => pl.name === entry.params!.b);
+        const kind =
+          entry.key === 'logSteal'
+            ? 'steal'
+            : entry.key === 'logAssassinate'
+              ? 'assassinate'
+              : entry.key === 'logCoup'
+                ? 'coup'
+                : null;
+        if (kind && actor && victim) {
+          // a steal drags coins from the victim to the thief; the others
+          // travel from the actor to their target
+          const from = kind === 'steal' ? seatPoint(victim.id) : seatPoint(actor.id);
+          const to = kind === 'steal' ? seatPoint(actor.id) : seatPoint(victim.id);
+          setAttack({ key: logLen, kind, from, to });
+          setTimeout(() => setAttack((a) => (a?.key === logLen ? null : a)), 700);
+          if (kind === 'coup') {
+            haptics.medium();
+            shake.value = withSequence(
+              withTiming(-9, { duration: 55 }),
+              withTiming(8, { duration: 55 }),
+              withTiming(-5, { duration: 50 }),
+              withTiming(0, { duration: 70 }),
+            );
+          }
+        }
+      }
       if (entry.key === 'logLostCard' && entry.params?.a && tableBox.w > 0) {
         // Launch a card from the loser's seat toward the discard piles.
         const loser = g.players.find((pl) => pl.name === entry.params!.a);
@@ -818,6 +971,28 @@ export function GameScreen() {
       onAction: () => leave(),
     });
   };
+
+  /**
+   * The claim on the table right now: an action's character claim while it
+   * can still be challenged, or a blocker's claim during its window.
+   */
+  const claimOf = (id: string): Role | null => {
+    const p = g.pending;
+    if (!p) return null;
+    if (p.block && p.block.blocker === id) return p.block.role;
+    if (
+      p.actor === id &&
+      p.claimedRole &&
+      (g.phase === 'action_challenge' || g.phase === 'block' || g.phase === 'block_challenge')
+    ) {
+      return p.claimedRole;
+    }
+    return null;
+  };
+  const hasPassed = (id: string) =>
+    !!g.pending &&
+    (g.phase === 'action_challenge' || g.phase === 'block' || g.phase === 'block_challenge') &&
+    g.pending.passed.includes(id);
 
   /* ----- context panel by phase ----- */
 
@@ -985,6 +1160,13 @@ export function GameScreen() {
             {targetName ? ` — ${t('onPlayer', { name: targetName })}` : ''}
           </Text>
         ) : null}
+        <Text style={styles.tallyText}>
+          {t('respondedTally', {
+            done: g.players.filter((p) => isAlive(p) && hasPassed(p.id)).length,
+            total:
+              g.players.filter((p) => isAlive(p) && hasPassed(p.id)).length + responders.length,
+          })}
+        </Text>
         <View style={[styles.btnRow, rtl && styles.rowReverse]}>
           {g.phase === 'block' ? (
             blockRoles.map((r) => (
@@ -1090,11 +1272,37 @@ export function GameScreen() {
       </Animated.View>
     );
   } else {
-    // Waiting on someone else
-    const label =
-      g.phase === 'action' && current
-        ? t('turnOf', { name: current.name })
-        : t('waitingOthers');
+    // Waiting on someone else — say what they are actually deciding
+    const owed = responders
+      .map((id) => g.players.find((p) => p.id === id)?.name)
+      .filter(Boolean) as string[];
+    const who = owed.length === 1 ? owed[0] : owed.length > 1 ? t('several', { n: owed.length }) : '';
+    let label: string;
+    if (g.phase === 'action' && current) {
+      label = t('turnOf', { name: current.name });
+    } else if (g.phase === 'action_challenge' && pending) {
+      label = t('waitChallenge', {
+        who,
+        name: actorName,
+        role: t((pending.claimedRole ?? 'duke') as TKey),
+      });
+    } else if (g.phase === 'block' && pending) {
+      label = t('waitBlock', { who, action: t(ACTION_LABEL[pending.action]) });
+    } else if (g.phase === 'block_challenge' && pending?.block) {
+      const blocker = g.players.find((p) => p.id === pending.block!.blocker)?.name ?? '';
+      label = t('waitBlockChallenge', {
+        who,
+        name: blocker,
+        role: t(pending.block.role as TKey),
+      });
+    } else if (g.phase === 'lose_card' && g.lossQueue[0]) {
+      const loser = g.players.find((p) => p.id === g.lossQueue[0].playerId)?.name ?? '';
+      label = t('waitLose', { name: loser });
+    } else if (g.phase === 'exchange' && pending) {
+      label = t('waitExchange', { name: actorName });
+    } else {
+      label = t('waitingOthers');
+    }
     panel = (
       <Animated.View
         key={`wait-${current?.id ?? ''}-${g.phase}`}
@@ -1205,6 +1413,7 @@ export function GameScreen() {
         }
         layout={LinearTransition.duration(260)}
         style={[
+          shakeStyle,
           styles.tableArea,
           needsMe && g.phase !== 'game_over'
             ? { marginBottom: Math.max(0, sheetH - myAreaH + 8) }
@@ -1221,7 +1430,7 @@ export function GameScreen() {
             {/* felt inner shade line */}
             <View style={styles.feltInnerLine} pointerEvents="none" />
             {/* table center: the Court + reveals + event banner */}
-            <View style={styles.tableCenter} pointerEvents="none">
+            <View style={styles.tableCenter} pointerEvents="box-none">
               <View style={styles.centerRow}>
                 <View style={styles.courtStack}>
                   {[2, 1, 0].map((i) => (
@@ -1235,7 +1444,14 @@ export function GameScreen() {
                   ))}
                   <Text style={styles.courtCount}>{g.deck.length}</Text>
                 </View>
-                <DiscardPiles g={g} />
+                <DiscardPiles
+                  g={g}
+                  onPress={() => {
+                    haptics.selection();
+                    sound.play('select');
+                    setDeckOpen(true);
+                  }}
+                />
               </View>
             </View>
           </LinearGradient>
@@ -1258,6 +1474,8 @@ export function GameScreen() {
             targetable={targetable(p)}
             anchor={SEAT_ANCHORS[opponents.length][i]}
             compact={needsMe && g.phase !== 'game_over'}
+            claim={claimOf(p.id)}
+            passed={hasPassed(p.id)}
             onTarget={() => {
               if (!targetable(p)) return;
               haptics.selection();
@@ -1303,9 +1521,12 @@ export function GameScreen() {
             </View>
           </Animated.View>
         ) : null}
+        {attack ? (
+          <AttackFx key={`fx-${attack.key}`} kind={attack.kind} from={attack.from} to={attack.to} />
+        ) : null}
         {fly ? (
           <FlyingCard
-            key={fly.key}
+            key={`fly-${fly.key}`}
             from={fly.from}
             to={{ x: tableBox.w * 0.5 - 17, y: tableBox.h * 0.40 }}
           />
@@ -1323,6 +1544,8 @@ export function GameScreen() {
           anchor={{ x: 0.5, y: 0.70 }}
           anchorBottom={0.05}
           compact={needsMe && g.phase !== 'game_over'}
+          claim={claimOf(me.id)}
+          passed={hasPassed(me.id)}
           showFaces
         />
       </Animated.View>
@@ -1351,10 +1574,16 @@ export function GameScreen() {
             <Pressy
               key={i}
               scaleTo={0.95}
-              disabled={!iLose || c.revealed}
+              disabled={c.revealed}
+              noDimWhenDisabled
               onPress={() => {
                 haptics.selection();
-                setLoseIdx(i);
+                if (iLose) {
+                  setLoseIdx(i);
+                } else {
+                  sound.play('flip');
+                  setPeek(c.role);
+                }
               }}
             >
               <InfluenceCard
@@ -1449,6 +1678,20 @@ export function GameScreen() {
           </Animated.View>
         </Animated.View>
       ) : null}
+
+      {/* Tapped one of my own cards: bigger, with its ability reminder */}
+      <Modal visible={!!peek} transparent animationType="fade" onRequestClose={() => setPeek(null)}>
+        <Pressy style={styles.peekBackdrop} onPress={() => setPeek(null)} scaleTo={1}>
+          {peek ? (
+            <Animated.View entering={ZoomIn.duration(240)} style={styles.peekCard}>
+              <InfluenceCard role={peek} width={Math.min(240, width * 0.55)} />
+              <Text style={[styles.peekName, { color: roleColors[peek] }]}>{t(peek as TKey)}</Text>
+              <Text style={[styles.peekText, rtl && styles.rtlText]}>{t(ROLE_BLURB[peek])}</Text>
+              <Text style={styles.peekHint}>{t('tapToClose')}</Text>
+            </Animated.View>
+          ) : null}
+        </Pressy>
+      </Modal>
 
       {/* Deck tracker — the 15 court cards at a glance */}
       <Modal
@@ -1624,6 +1867,35 @@ const makeStyles = (theme: Theme) =>
       alignItems: 'center',
       gap: 10,
     },
+    deltaWrap: {
+      position: 'absolute',
+      top: -6,
+      alignSelf: 'center',
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      zIndex: 25,
+    },
+    deltaText: {
+      fontSize: 15,
+      fontFamily: latinFont('bold'),
+      textShadowColor: 'rgba(0,0,0,0.95)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
+    },
+    deltaUp: { color: '#7ee08a' },
+    deltaDown: { color: '#ff6b81' },
+    fxWrap: {
+      position: 'absolute',
+      zIndex: 55,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fxCoins: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+    },
     flyingCard: {
       position: 'absolute',
       zIndex: 30,
@@ -1759,6 +2031,36 @@ const makeStyles = (theme: Theme) =>
       backgroundColor: theme.colors.warning,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    passedBadge: {
+      position: 'absolute',
+      top: -3,
+      right: -3,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: theme.colors.success,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    claimBadge: {
+      position: 'absolute',
+      top: -30,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 6,
+      paddingRight: 9,
+      paddingVertical: 2,
+      borderRadius: theme.radius.pill,
+      borderWidth: 1.5,
+      backgroundColor: 'rgba(8,10,14,0.94)',
+      maxWidth: 132,
+      zIndex: 8,
+    },
+    claimBadgeText: {
+      fontSize: 10.5,
+      fontFamily: font('bold'),
     },
     seatNameChip: {
       backgroundColor: 'rgba(8, 10, 14, 0.95)',
@@ -2164,6 +2466,13 @@ const makeStyles = (theme: Theme) =>
       gap: 8,
       justifyContent: 'center',
     },
+    tallyText: {
+      fontSize: 11.5,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkFaint,
+      textAlign: 'center',
+      marginTop: -4,
+    },
     waitRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -2202,6 +2511,40 @@ const makeStyles = (theme: Theme) =>
       fontFamily: font('black'),
       color: theme.colors.goldLight,
       textAlign: 'center',
+    },
+    peekBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(4,6,10,0.9)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 28,
+    },
+    peekCard: {
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.xl,
+      borderWidth: 1,
+      borderColor: theme.colors.borderBright,
+      paddingVertical: 22,
+      paddingHorizontal: 24,
+      maxWidth: 340,
+    },
+    peekName: {
+      fontSize: 20,
+      fontFamily: font('black'),
+    },
+    peekText: {
+      fontSize: 13.5,
+      lineHeight: 21,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
+      textAlign: 'center',
+    },
+    peekHint: {
+      fontSize: 11,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkFaint,
     },
     logModalBackdrop: {
       flex: 1,

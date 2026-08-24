@@ -247,6 +247,22 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   keeper, waiting states, and a game-over overlay with **ranked
   standings** (1st = winner, then reverse elimination order; host gets
   Play-again).
+- **Claim badges**: while a character claim is live (an action awaiting a
+  challenge, or a block and its challenge window) a badge with the role
+  portrait is pinned to the claiming player's seat, so the claim lives on
+  the person making it rather than only in the prompt.
+- **Response progress**: seats show an hourglass while they owe an answer
+  and a green tick once they've answered; the prompt carries an
+  "{done} of {total} answered" tally.
+- **Waiting line** names the decision in progress ("… deciding whether to
+  block Steal", "… choosing a card to lose", "… exchanging with the Court").
+- **Coin deltas**: a green +N / red −N drifts up off any coin chip that
+  changes, so the economy is readable without reading the log.
+- **Attack visuals**: a steal drags coins from victim to thief, an
+  assassination arcs a strike, a coup lands with an impact and a short
+  screen shake.
+- **Peek**: tapping one of your own cards enlarges it with its ability
+  reminder; tapping the discard piles opens the deck tracker.
 - Motion: every interactive element uses press feedback (scale+fade);
   every new game event floats an animated **banner over the table** —
   rendered as the last child of the table with a high zIndex/elevation so

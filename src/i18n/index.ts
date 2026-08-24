@@ -118,6 +118,19 @@ export const dict = {
   declares: { en: '{name}: {action}', ar: '{name}: {action}' },
   onPlayer: { en: 'on {name}', ar: 'على {name}' },
   waitingOthers: { en: 'Waiting for other players…', ar: 'بانتظار اللاعبين الآخرين…' },
+  several: { en: '{n} players', ar: '{n} لاعبين' },
+  respondedTally: { en: '{done} of {total} answered', ar: 'أجاب {done} من {total}' },
+  waitChallenge: {
+    en: '{who} deciding whether to challenge {name}’s {role}…',
+    ar: '{who} يقرر إن كان سيتحدى {role} لـ{name}…',
+  },
+  waitBlock: { en: '{who} deciding whether to block {action}…', ar: '{who} يقرر إن كان سيصدّ {action}…' },
+  waitBlockChallenge: {
+    en: '{who} deciding whether to challenge {name}’s {role} block…',
+    ar: '{who} يقرر إن كان سيتحدى صدّ {name} بـ{role}…',
+  },
+  waitLose: { en: '{name} is choosing a card to lose…', ar: '{name} يختار بطاقة ليخسرها…' },
+  waitExchange: { en: '{name} is exchanging with the Court…', ar: '{name} يبادل مع المحكمة…' },
   loseCardTitle: { en: 'Choose a card to lose', ar: 'اختر بطاقة لتخسرها' },
   exchangeTitle: { en: 'Choose {n} cards to keep', ar: 'اختر {n} بطاقات لتحتفظ بها' },
   confirm: { en: 'Confirm', ar: 'تأكيد' },
@@ -127,6 +140,7 @@ export const dict = {
   playAgain: { en: 'Play again', ar: 'العب مجدداً' },
   backHome: { en: 'Back to home', ar: 'العودة للرئيسية' },
   ok: { en: 'OK', ar: 'حسناً' },
+  tapToClose: { en: 'Tap anywhere to close', ar: 'اضغط في أي مكان للإغلاق' },
   cancel: { en: 'Cancel', ar: 'إلغاء' },
 
   // Chat, emotes & taunts
