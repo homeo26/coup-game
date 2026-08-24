@@ -1,12 +1,15 @@
 /**
- * HomeScreen — landing: logo, player name, create a room or join one
- * with a 4-letter code. Shown when no room is active.
+ * HomeScreen — the front door: the cast fanned out under the logo, then a
+ * compact identity row (avatar + name), one primary action, and two
+ * expanding tiles for joining a room or playing offline. Everything is
+ * kept to one screen so it reads as a game menu, not a form.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -21,11 +24,14 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeOut,
+  LinearTransition,
+  ZoomIn,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import * as Linking from 'expo-linking';
 import { Theme, font, latinFont, roleColors, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
 import { Breathing } from '../components/Breathing';
@@ -33,14 +39,16 @@ import { ANIMALS, Avatar } from '../components/Avatar';
 import { HeroFan } from '../components/HeroFan';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useSettings } from '../settings';
-import * as Linking from 'expo-linking';
 import { useRoom } from '../net/RoomContext';
 import { consumePendingJoin, onPendingJoin, parseJoinCode } from '../net/deeplink';
 import { t, TKey, isRTL } from '../i18n';
 import * as haptics from '../haptics';
+import * as sound from '../sound';
 
 /** Rotating one-liners under the hero: flavour plus a rules nudge. */
 const TIPS: TKey[] = ['tip1', 'tip2', 'tip3', 'tip4', 'tip5'];
+
+type Panel = 'join' | 'offline' | null;
 
 export function HomeScreen() {
   const theme = useTheme();
@@ -50,38 +58,33 @@ export function HomeScreen() {
   const [name, setName] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState('');
   const [botCount, setBotCount] = useState(2);
+  const [panel, setPanel] = useState<Panel>(null);
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   const [working, setWorking] = useState<'create' | 'join' | null>(null);
   void lang; // re-render on language change
 
   const effectiveName = (name ?? playerName).trim();
+  const rtl = isRTL();
 
-  /**
-   * A shared link (coupgame://join/ABCD or the hosted https page) drops
-   * the code straight into the join field — and joins immediately when we
-   * already know the player's name.
-   */
-  const incoming = Linking.useURL();
-  const handled = useRef<string | null>(null);
-  const takeCode = (code: string | null) => {
-    if (!code || handled.current === code) return;
-    handled.current = code;
-    setCodeInput(code);
-    const who = (name ?? playerName).trim();
-    if (who && !busy) {
-      haptics.medium();
-      join(code, who).catch((e) => fail(e));
-    }
-  };
-  // the /join/[code] route stashes the code before redirecting here
+  /* ----- rotating tip + a breathing primary action ----- */
+  const [tipIndex, setTipIndex] = useState(0);
   useEffect(() => {
-    takeCode(consumePendingJoin());
-    return onPendingJoin(takeCode);
+    const id = setInterval(() => setTipIndex((i) => (i + 1) % TIPS.length), 4200);
+    return () => clearInterval(id);
   }, []);
-  // and a raw URL (bare scheme, or a link opened while we're running)
+  const pulse = useSharedValue(0);
   useEffect(() => {
-    takeCode(parseJoinCode(incoming));
-  }, [incoming]);
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+  }, [pulse]);
+  const ctaStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + pulse.value * 0.016 }],
+    shadowOpacity: 0.3 + pulse.value * 0.4,
+  }));
 
   const remember = () => {
     if (effectiveName && effectiveName !== playerName) set('playerName', effectiveName);
@@ -97,16 +100,18 @@ export function HomeScreen() {
     });
   };
 
+  const needName = () => {
+    setNotice({ icon: 'person-outline', title: t('yourName'), body: t('nameNeeded') });
+  };
+
   const onCreate = async () => {
     Keyboard.dismiss();
-    if (!effectiveName) {
-      setNotice({ icon: 'person-outline', title: t('yourName'), body: t('nameNeeded') });
-      return;
-    }
+    if (!effectiveName) return needName();
     remember();
     setWorking('create');
     try {
       haptics.medium();
+      sound.play('tap');
       await create(effectiveName);
     } catch (e) {
       fail(e);
@@ -115,14 +120,11 @@ export function HomeScreen() {
     }
   };
 
-  const onJoin = async () => {
+  const onJoin = async (code = codeInput) => {
     Keyboard.dismiss();
-    if (!effectiveName) {
-      setNotice({ icon: 'person-outline', title: t('yourName'), body: t('nameNeeded') });
-      return;
-    }
-    const code = codeInput.trim().toUpperCase();
-    if (code.length !== 4) {
+    if (!effectiveName) return needName();
+    const clean = code.trim().toUpperCase();
+    if (clean.length !== 4) {
       setNotice({ icon: 'key-outline', title: t('joinGame'), body: t('codeNeeded') });
       return;
     }
@@ -130,7 +132,8 @@ export function HomeScreen() {
     setWorking('join');
     try {
       haptics.medium();
-      await join(code, effectiveName);
+      sound.play('tap');
+      await join(clean, effectiveName);
     } catch (e) {
       fail(e);
     } finally {
@@ -140,41 +143,40 @@ export function HomeScreen() {
 
   const onPlayBots = () => {
     Keyboard.dismiss();
-    if (!effectiveName) {
-      setNotice({ icon: 'person-outline', title: t('yourName'), body: t('nameNeeded') });
-      return;
-    }
+    if (!effectiveName) return needName();
     remember();
     haptics.medium();
+    sound.play('tap');
     playLocal(effectiveName, botCount);
   };
 
-  const rtl = isRTL();
-
-  // a slowly rotating tip keeps the screen alive and teaches the rules
-  const [tipIndex, setTipIndex] = useState(0);
+  /* ----- shared links: coupgame://join/ABCD or the hosted page ----- */
+  const incoming = Linking.useURL();
+  const handled = useRef<string | null>(null);
+  const takeCode = (code: string | null) => {
+    if (!code || handled.current === code) return;
+    handled.current = code;
+    setCodeInput(code);
+    setPanel('join');
+    const who = (name ?? playerName).trim();
+    if (who && !busy) onJoin(code);
+  };
   useEffect(() => {
-    const id = setInterval(() => setTipIndex((i) => (i + 1) % TIPS.length), 4200);
-    return () => clearInterval(id);
+    takeCode(consumePendingJoin());
+    return onPendingJoin(takeCode);
   }, []);
-
-  // the primary action breathes so the screen never looks static
-  const pulse = useSharedValue(0);
   useEffect(() => {
-    pulse.value = withRepeat(
-      withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
-  }, [pulse]);
-  const ctaStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + pulse.value * 0.018 }],
-    shadowOpacity: 0.35 + pulse.value * 0.4,
-  }));
+    takeCode(parseJoinCode(incoming));
+  }, [incoming]);
+
+  const openPanel = (p: Panel) => {
+    haptics.selection();
+    sound.play('select');
+    setPanel((cur) => (cur === p ? null : p));
+  };
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      {/* neon-cyborg backdrop (scripts/gen-bg.py) + slow character wash */}
       <Image
         source={require('../../assets/bg-neon.png')}
         style={StyleSheet.absoluteFill}
@@ -190,14 +192,13 @@ export function HomeScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* ---------- hero ---------- */}
           <Animated.View entering={FadeInDown.duration(400)} style={styles.heroWrap}>
             <Image
               source={require('../../assets/logo.png')}
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.tag}>{t('homeTag')}</Text>
-            {/* the cast, fanned out — tap a card to hear the character */}
             <HeroFan />
             <Animated.Text
               key={tipIndex}
@@ -207,134 +208,184 @@ export function HomeScreen() {
             >
               {t(TIPS[tipIndex])}
             </Animated.Text>
-            {/* pick your animal avatar */}
-            <Text style={styles.avatarLabel}>{t('avatarLabel')}</Text>
-            <View style={styles.cast}>
-              {ANIMALS.map((r, i) => {
-                const selected = avatar === r;
-                return (
-                  <Animated.View key={r} entering={FadeInDown.duration(320).delay(80 + i * 35)}>
-                    <Pressy
-                      scaleTo={0.88}
-                      onPress={() => {
-                        haptics.selection();
-                        set('avatar', r);
-                      }}
-                      style={[styles.avatarWrap, selected && styles.avatarSel]}
-                    >
-                      <Avatar id={r} size={selected ? 54 : 46} ring={selected ? 3 : 1.5} />
-                      {selected ? (
-                        <View style={styles.avatarCheck}>
-                          <Ionicons name="checkmark" size={11} color={theme.colors.inkOnGold} />
-                        </View>
-                      ) : null}
-                    </Pressy>
-                  </Animated.View>
-                );
-              })}
-            </View>
           </Animated.View>
 
+          {/* ---------- identity: avatar + name on one line ---------- */}
           <Animated.View
             entering={FadeInDown.duration(400).delay(80)}
-            style={[styles.card, { borderColor: roleColors.duke + '99' }]}
+            style={[styles.identity, rtl && styles.rowReverse]}
           >
-            <View style={[styles.cardEdge, { backgroundColor: roleColors.duke }]} />
-            <Text style={[styles.label, rtl && styles.rtlText]}>{t('yourName')}</Text>
+            <Pressy scaleTo={0.9} onPress={() => setAvatarOpen(true)} style={styles.avatarBtn}>
+              <Avatar id={avatar} size={44} ring={2} />
+              <View style={styles.avatarEdit}>
+                <Ionicons name="swap-horizontal" size={10} color={theme.colors.inkOnGold} />
+              </View>
+            </Pressy>
             <TextInput
               value={name ?? playerName}
               onChangeText={setName}
               editable={hydrated}
               placeholder={t('yourName')}
               placeholderTextColor={theme.colors.inkFaint}
-              style={[styles.input, rtl && styles.rtlText]}
+              style={[styles.nameInput, rtl && styles.rtlText]}
               maxLength={16}
               returnKeyType="done"
             />
-
-            <Animated.View style={ctaStyle}>
-              <Pressy
-                scaleTo={0.96}
-                style={[styles.primaryBtn, (busy || working !== null) && styles.btnDisabled]}
-                onPress={onCreate}
-                disabled={busy || working !== null}
-              >
-                <Ionicons name="add-circle" size={22} color={theme.colors.inkOnGold} />
-                <Text style={styles.primaryBtnText}>
-                  {working === 'create' ? '…' : t('createGame')}
-                </Text>
-              </Pressy>
-            </Animated.View>
           </Animated.View>
 
-          <Animated.View
-            entering={FadeInDown.duration(400).delay(160)}
-            style={[styles.card, { borderColor: roleColors.captain + '99' }]}
-          >
-            <View style={[styles.cardEdge, { backgroundColor: roleColors.captain }]} />
-            <Text style={[styles.label, rtl && styles.rtlText]}>{t('joinGame')}</Text>
-            <View style={[styles.joinRow, rtl && styles.rowReverse]}>
-              <TextInput
-                value={codeInput}
-                onChangeText={(v) => setCodeInput(v.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 4))}
-                placeholder="ABCD"
-                autoCapitalize="characters"
-                autoCorrect={false}
-                placeholderTextColor={theme.colors.inkFaint}
-                style={styles.codeInput}
-                maxLength={4}
-                returnKeyType="go"
-                onSubmitEditing={onJoin}
-              />
-              <Pressy
-                scaleTo={0.94}
-                style={[styles.joinBtn, (busy || working !== null) && styles.btnDisabled]}
-                onPress={onJoin}
-                disabled={busy || working !== null}
-              >
-                <Text style={styles.joinBtnText}>{working === 'join' ? '…' : t('join')}</Text>
-              </Pressy>
-            </View>
-          </Animated.View>
-
-          <Animated.View
-            entering={FadeInDown.duration(400).delay(240)}
-            style={[styles.card, { borderColor: roleColors.ambassador + '99' }]}
-          >
-            <View style={[styles.cardEdge, { backgroundColor: roleColors.ambassador }]} />
-            <Text style={[styles.label, rtl && styles.rtlText]}>{t('offlineMode')}</Text>
-            <View style={[styles.botRow, rtl && styles.rowReverse]}>
-              <Text style={[styles.botLabel, rtl && styles.rtlText]}>{t('botCount')}</Text>
-              <View style={[styles.botChips, rtl && styles.rowReverse]}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Pressy
-                    key={n}
-                    scaleTo={0.9}
-                    style={[styles.botChip, botCount === n && styles.botChipSel]}
-                    onPress={() => {
-                      haptics.selection();
-                      setBotCount(n);
-                    }}
-                  >
-                    <Text style={[styles.botChipText, botCount === n && styles.botChipTextSel]}>
-                      {n}
-                    </Text>
-                  </Pressy>
-                ))}
-              </View>
-            </View>
+          {/* ---------- primary action ---------- */}
+          <Animated.View entering={FadeInDown.duration(400).delay(140)} style={ctaStyle}>
             <Pressy
-              scaleTo={0.96}
-              style={[styles.botsBtn, (busy || working !== null) && styles.btnDisabled]}
-              onPress={onPlayBots}
+              scaleTo={0.97}
+              style={[styles.primaryBtn, (busy || working !== null) && styles.btnDisabled]}
+              onPress={onCreate}
               disabled={busy || working !== null}
             >
-              <Ionicons name="hardware-chip-outline" size={20} color={theme.colors.ink} />
-              <Text style={styles.botsBtnText}>{t('playVsBots')}</Text>
+              <Ionicons name="flame" size={22} color={theme.colors.inkOnGold} />
+              <Text style={styles.primaryBtnText}>
+                {working === 'create' ? '…' : t('createGame')}
+              </Text>
             </Pressy>
+          </Animated.View>
+
+          {/* ---------- two tiles: join / offline ---------- */}
+          <Animated.View
+            entering={FadeInDown.duration(400).delay(200)}
+            style={[styles.tileRow, rtl && styles.rowReverse]}
+          >
+            <Pressy
+              scaleTo={0.96}
+              onPress={() => openPanel('join')}
+              style={[
+                styles.tile,
+                { borderColor: roleColors.captain + (panel === 'join' ? 'ff' : '66') },
+                panel === 'join' && styles.tileActive,
+              ]}
+            >
+              <Ionicons name="enter-outline" size={22} color={roleColors.captain} />
+              <Text style={styles.tileText}>{t('joinGame')}</Text>
+            </Pressy>
+            <Pressy
+              scaleTo={0.96}
+              onPress={() => openPanel('offline')}
+              style={[
+                styles.tile,
+                { borderColor: roleColors.ambassador + (panel === 'offline' ? 'ff' : '66') },
+                panel === 'offline' && styles.tileActive,
+              ]}
+            >
+              <Ionicons name="hardware-chip-outline" size={22} color={roleColors.ambassador} />
+              <Text style={styles.tileText}>{t('offlineMode')}</Text>
+            </Pressy>
+          </Animated.View>
+
+          {/* ---------- the selected tile's controls ---------- */}
+          <Animated.View layout={LinearTransition.duration(220)} style={styles.panelWrap}>
+            {panel === 'join' ? (
+              <Animated.View
+                entering={FadeInDown.duration(220)}
+                exiting={FadeOut.duration(150)}
+                style={[styles.panelBox, { borderColor: roleColors.captain + '55' }]}
+              >
+                <View style={[styles.joinRow, rtl && styles.rowReverse]}>
+                  <TextInput
+                    value={codeInput}
+                    onChangeText={(v) =>
+                      setCodeInput(v.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 4))
+                    }
+                    placeholder="ABCD"
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    placeholderTextColor={theme.colors.inkFaint}
+                    style={styles.codeInput}
+                    maxLength={4}
+                    returnKeyType="go"
+                    onSubmitEditing={() => onJoin()}
+                  />
+                  <Pressy
+                    scaleTo={0.94}
+                    style={[styles.goBtn, (busy || working !== null) && styles.btnDisabled]}
+                    onPress={() => onJoin()}
+                    disabled={busy || working !== null}
+                  >
+                    <Text style={styles.goBtnText}>{working === 'join' ? '…' : t('join')}</Text>
+                  </Pressy>
+                </View>
+              </Animated.View>
+            ) : panel === 'offline' ? (
+              <Animated.View
+                entering={FadeInDown.duration(220)}
+                exiting={FadeOut.duration(150)}
+                style={[styles.panelBox, { borderColor: roleColors.ambassador + '55' }]}
+              >
+                <View style={[styles.botRow, rtl && styles.rowReverse]}>
+                  <Text style={[styles.botLabel, rtl && styles.rtlText]}>{t('botCount')}</Text>
+                  <View style={[styles.botChips, rtl && styles.rowReverse]}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Pressy
+                        key={n}
+                        scaleTo={0.9}
+                        style={[styles.botChip, botCount === n && styles.botChipSel]}
+                        onPress={() => {
+                          haptics.selection();
+                          sound.play('select');
+                          setBotCount(n);
+                        }}
+                      >
+                        <Text
+                          style={[styles.botChipText, botCount === n && styles.botChipTextSel]}
+                        >
+                          {n}
+                        </Text>
+                      </Pressy>
+                    ))}
+                  </View>
+                </View>
+                <Pressy
+                  scaleTo={0.96}
+                  style={[styles.goWide, (busy || working !== null) && styles.btnDisabled]}
+                  onPress={onPlayBots}
+                  disabled={busy || working !== null}
+                >
+                  <Text style={styles.goBtnText}>{t('playVsBots')}</Text>
+                </Pressy>
+              </Animated.View>
+            ) : null}
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ---------- avatar picker ---------- */}
+      <Modal
+        visible={avatarOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAvatarOpen(false)}
+      >
+        <Pressy scaleTo={1} style={styles.pickBackdrop} onPress={() => setAvatarOpen(false)}>
+          <Animated.View entering={ZoomIn.duration(220)} style={styles.pickCard}>
+            <Text style={styles.pickTitle}>{t('avatarLabel')}</Text>
+            <View style={styles.pickGrid}>
+              {ANIMALS.map((a) => (
+                <Pressy
+                  key={a}
+                  scaleTo={0.88}
+                  onPress={() => {
+                    haptics.selection();
+                    sound.play('select');
+                    set('avatar', a);
+                    setAvatarOpen(false);
+                  }}
+                  style={[styles.pickItem, avatar === a && styles.pickItemSel]}
+                >
+                  <Avatar id={a} size={52} ring={avatar === a ? 3 : 1.5} />
+                </Pressy>
+              ))}
+            </View>
+          </Animated.View>
+        </Pressy>
+      </Modal>
+
       <MessageSheet message={notice} onClose={() => setNotice(null)} />
     </SafeAreaView>
   );
@@ -342,68 +393,40 @@ export function HomeScreen() {
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
-    root: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    scroll: {
-      padding: 20,
-      paddingBottom: 32,
-    },
-    heroWrap: {
-      alignItems: 'center',
-      marginTop: 8,
-      marginBottom: 20,
-    },
-    logo: {
-      width: 190,
-      height: 190,
-    },
-    tag: {
-      fontSize: 14,
-      fontFamily: font('semibold'),
-      color: theme.colors.inkSoft,
-      marginTop: -6,
-    },
+    root: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: 20, paddingBottom: 28 },
+    rowReverse: { flexDirection: 'row-reverse' },
+    rtlText: { textAlign: 'right', writingDirection: 'rtl' },
+
+    heroWrap: { alignItems: 'center', marginTop: 2 },
+    logo: { width: 168, height: 168, marginBottom: -14 },
     tip: {
       fontSize: 12.5,
       fontFamily: font('semibold'),
       color: theme.colors.goldLight,
       textAlign: 'center',
-      marginTop: 2,
-      marginBottom: 2,
       paddingHorizontal: 12,
-      minHeight: 34,
+      minHeight: 32,
+      marginTop: 2,
     },
-    cast: {
+
+    identity: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-      marginTop: 6,
       alignItems: 'center',
-      justifyContent: 'center',
-      maxWidth: 400,
+      gap: 12,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.lg,
+      borderWidth: 1.5,
+      borderColor: theme.colors.border,
+      padding: 10,
+      marginBottom: 12,
+      ...theme.shadow.card,
     },
-    avatarLabel: {
-      fontSize: 12,
-      fontFamily: font('bold'),
-      color: theme.colors.inkSoft,
-      marginTop: 12,
-    },
-    avatarWrap: {
-      width: 58,
-      height: 58,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 32,
-    },
-    avatarSel: {
-      backgroundColor: 'rgba(212, 168, 84, 0.14)',
-    },
-    avatarCheck: {
+    avatarBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+    avatarEdit: {
       position: 'absolute',
-      bottom: 2,
-      right: 2,
+      bottom: -1,
+      right: -1,
       width: 17,
       height: 17,
       borderRadius: 9,
@@ -411,114 +434,88 @@ const makeStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    card: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.radius.lg,
-      borderWidth: 1.5,
-      borderColor: theme.colors.border,
-      padding: 18,
-      marginBottom: 16,
-      overflow: 'hidden',
-      ...theme.shadow.card,
-    },
-    cardEdge: {
-      position: 'absolute',
-      left: 0,
-      top: 0,
-      bottom: 0,
-      width: 4,
-    },
-    label: {
-      fontSize: 13,
-      fontFamily: font('bold'),
-      color: theme.colors.inkSoft,
-      marginBottom: 8,
-    },
-    rtlText: {
-      textAlign: 'right',
-      writingDirection: 'rtl',
-    },
-    rowReverse: {
-      flexDirection: 'row-reverse',
-    },
-    input: {
-      height: 48,
-      borderRadius: theme.radius.sm,
-      borderWidth: 1.5,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surfaceElevated,
+    nameInput: {
+      flex: 1,
+      height: 46,
       color: theme.colors.ink,
-      paddingHorizontal: 14,
-      fontFamily: font('semibold'),
-      fontSize: 15,
+      fontFamily: font('bold'),
+      fontSize: 16,
+      paddingHorizontal: 4,
     },
+
     primaryBtn: {
-      marginTop: 14,
-      height: 54,
+      height: 58,
       borderRadius: theme.radius.md,
       backgroundColor: theme.colors.gold,
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'row',
-      gap: 8,
+      gap: 10,
       ...theme.shadow.goldGlow,
     },
-    btnDisabled: {
-      opacity: 0.55,
+    primaryBtnText: { fontSize: 17, fontFamily: font('black'), color: theme.colors.inkOnGold },
+    btnDisabled: { opacity: 0.55 },
+
+    tileRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
+    tile: {
+      flex: 1,
+      height: 74,
+      borderRadius: theme.radius.md,
+      borderWidth: 1.5,
+      backgroundColor: theme.colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
     },
-    primaryBtnText: {
-      fontSize: 16,
-      fontFamily: font('bold'),
-      color: theme.colors.inkOnGold,
-    },
-    joinRow: {
-      flexDirection: 'row',
+    tileActive: { backgroundColor: theme.colors.surfaceHover },
+    tileText: { fontSize: 12.5, fontFamily: font('bold'), color: theme.colors.ink },
+
+    panelWrap: { marginTop: 12 },
+    panelBox: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.md,
+      borderWidth: 1.5,
+      padding: 12,
       gap: 10,
     },
+    joinRow: { flexDirection: 'row', gap: 10 },
     codeInput: {
       flex: 1,
-      height: 54,
+      height: 52,
       borderRadius: theme.radius.sm,
       borderWidth: 1.5,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.surfaceElevated,
       color: theme.colors.goldLight,
-      paddingHorizontal: 14,
       fontFamily: latinFont('bold'),
       fontSize: 22,
       letterSpacing: 10,
       textAlign: 'center',
     },
-    joinBtn: {
-      height: 54,
-      paddingHorizontal: 24,
-      borderRadius: theme.radius.md,
+    goBtn: {
+      height: 52,
+      paddingHorizontal: 26,
+      borderRadius: theme.radius.sm,
       backgroundColor: theme.colors.surfaceHover,
       borderWidth: 1.5,
       borderColor: theme.colors.gold,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    joinBtnText: {
-      fontSize: 15,
-      fontFamily: font('bold'),
-      color: theme.colors.goldLight,
-    },
-    botRow: {
-      flexDirection: 'row',
+    goWide: {
+      height: 50,
+      borderRadius: theme.radius.sm,
+      backgroundColor: theme.colors.surfaceHover,
+      borderWidth: 1.5,
+      borderColor: theme.colors.gold,
       alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 12,
+      justifyContent: 'center',
     },
-    botLabel: {
-      fontSize: 13,
-      fontFamily: font('semibold'),
-      color: theme.colors.inkSoft,
-    },
-    botChips: {
-      flexDirection: 'row',
-      gap: 6,
-    },
+    goBtnText: { fontSize: 15, fontFamily: font('bold'), color: theme.colors.goldLight },
+
+    botRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    botLabel: { fontSize: 13, fontFamily: font('semibold'), color: theme.colors.inkSoft },
+    botChips: { flexDirection: 'row', gap: 6 },
     botChip: {
       width: 38,
       height: 38,
@@ -529,32 +526,34 @@ const makeStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    botChipSel: {
-      borderColor: theme.colors.gold,
-      backgroundColor: theme.colors.surfaceHover,
-    },
-    botChipText: {
-      fontSize: 15,
-      fontFamily: latinFont('bold'),
-      color: theme.colors.inkSoft,
-    },
-    botChipTextSel: {
-      color: theme.colors.goldLight,
-    },
-    botsBtn: {
-      height: 50,
-      borderRadius: theme.radius.md,
-      backgroundColor: theme.colors.surfaceHover,
-      borderWidth: 1.5,
-      borderColor: theme.colors.borderBright,
+    botChipSel: { borderColor: theme.colors.gold, backgroundColor: theme.colors.surfaceHover },
+    botChipText: { fontSize: 15, fontFamily: latinFont('bold'), color: theme.colors.inkSoft },
+    botChipTextSel: { color: theme.colors.goldLight },
+
+    pickBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(4,6,10,0.88)',
       alignItems: 'center',
       justifyContent: 'center',
+      padding: 24,
+    },
+    pickCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.xl,
+      borderWidth: 1,
+      borderColor: theme.colors.borderBright,
+      padding: 20,
+      gap: 14,
+      alignItems: 'center',
+      maxWidth: 380,
+    },
+    pickTitle: { fontSize: 16, fontFamily: font('bold'), color: theme.colors.ink },
+    pickGrid: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: 8,
+      justifyContent: 'center',
     },
-    botsBtnText: {
-      fontSize: 15,
-      fontFamily: font('bold'),
-      color: theme.colors.ink,
-    },
+    pickItem: { padding: 3, borderRadius: 32 },
+    pickItemSel: { backgroundColor: 'rgba(212,168,84,0.16)' },
   });

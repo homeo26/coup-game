@@ -233,8 +233,10 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   tab morphs Home → Lobby → Game table with the room status.
 - Home is a showpiece rather than a form: the coin mark, the five
   character cards fanned and breathing (tap one and that character speaks
-  their line), a rotating rules tip, a pulsing primary action, and the
-  neon character-coloured backdrop.
+  their line), a rotating rules tip, then a single compact identity row
+  (avatar + name inline; the avatar opens a picker sheet), one pulsing
+  primary action, and two tiles — Join / Play offline — that expand to
+  reveal just the controls they need. Fits one screen, no tall form boxes.
 - Everything that appears also disappears: prompts, response buttons, the
   countdown chip, confirm bars, action rows, modals and the win card all
   have paired in/out animations (zoom/fade/slide).

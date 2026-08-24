@@ -223,35 +223,6 @@ function CoinDelta({ delta }: { delta: number }) {
   );
 }
 
-/**
- * Influence shown as small pips instead of a card fan. On a crowded table
- * ten opponent cards is just noise — the pips say how much influence each
- * player still holds, and a lost one carries the dead character's colour
- * (the discard piles by the Court still show exactly what died).
- */
-function InfluencePips({ cards }: { cards: { role: Role; revealed: boolean }[] }) {
-  const styles = useStyles(makeStyles);
-  return (
-    <View style={styles.pipRow}>
-      {cards.map((c, i) =>
-        c.revealed ? (
-          <View
-            key={i}
-            style={[
-              styles.pipDead,
-              { borderColor: roleColors[c.role], backgroundColor: roleColors[c.role] + '33' },
-            ]}
-          >
-            <RoleArt role={c.role} size={9} color={roleColors[c.role]} />
-          </View>
-        ) : (
-          <View key={i} style={styles.pipAlive} />
-        ),
-      )}
-    </View>
-  );
-}
-
 /** Coin count that pulses whenever the amount changes, with a floating delta. */
 function AnimatedCoins({
   amount,
@@ -366,8 +337,20 @@ function TableSeat({
   const theme = useTheme();
   const styles = useStyles(makeStyles);
   const dead = !isAlive(p);
-  const AV = compact ? (dense ? 38 : 44) : dense ? 48 : 58; // avatar size
-  const CARD = compact ? 34 : 44; // fan card width
+  const AV = compact ? (dense ? 40 : 44) : dense ? 50 : 58; // avatar size
+  // real cards even on a crowded table — just smaller and tucked closer.
+  // My own seat keeps big cards: they are the ones I have to read.
+  const CARD = showFaces
+    ? compact
+      ? 38
+      : 44
+    : dense
+      ? compact
+        ? 26
+        : 30
+      : compact
+        ? 34
+        : 44;
   const COIN = dense ? 13 : compact ? 14 : 18; // coin glyph size
 
   // A gentle scale nudge when the turn arrives at this seat
@@ -431,14 +414,17 @@ function TableSeat({
         {/* card fan peeking from behind the avatar; a killed character
             shows as a real face-up card at card proportions. On a crowded
             table the fan is replaced by pips under the name. */}
-        <View style={[styles.fan, dense && !showFaces && styles.fanHidden]} pointerEvents="none">
+        <View style={[styles.fan, dense && !showFaces && styles.fanTight]} pointerEvents="none">
           {p.cards.map((c, i) =>
             c.revealed || showFaces ? (
               <Animated.View
                 key={i}
                 entering={FlipInEasyY.duration(500)}
                 style={{
-                  transform: [{ rotate: `${i === 0 ? -15 : 15}deg` }, { translateY: -14 }],
+                  transform: [
+                    { rotate: `${i === 0 ? -15 : 15}deg` },
+                    { translateY: dense ? -8 : -14 },
+                  ],
                 }}
               >
                 <InfluenceCard role={c.role} dead={c.revealed} width={CARD} />
@@ -448,12 +434,18 @@ function TableSeat({
                 key={i}
                 style={[
                   styles.fanCard,
-                  { transform: [{ rotate: `${i === 0 ? -16 : 16}deg` }, { translateY: -3 }] },
+                  dense && styles.fanCardDense,
+                  {
+                    transform: [
+                      { rotate: `${i === 0 ? (dense ? -11 : -16) : dense ? 11 : 16}deg` },
+                      { translateY: dense ? -1 : -3 },
+                    ],
+                  },
                 ]}
               >
                 <Image
                   source={require('../../assets/cards/back.png')}
-                  style={{ width: 21, height: 30 }}
+                  style={dense ? { width: 17, height: 24 } : { width: 21, height: 30 }}
                   resizeMode="cover"
                 />
               </View>
@@ -529,7 +521,6 @@ function TableSeat({
             </>
           ) : null}
         </Animated.View>
-        {dense && !showFaces ? <InfluencePips cards={p.cards} /> : null}
         {dead ? (
           <Text style={styles.deadLabel}>{t('eliminated')}</Text>
         ) : dense ? null : (
@@ -2099,6 +2090,11 @@ const makeStyles = (theme: Theme) =>
       gap: 14,
       zIndex: -1,
     },
+    fanCardDense: {
+      width: 19,
+      height: 26,
+      borderRadius: 3,
+    },
     fanCard: {
       overflow: 'hidden',
       width: 24,
@@ -2172,29 +2168,9 @@ const makeStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    pipRow: {
-      flexDirection: 'row',
-      gap: 4,
-      marginTop: 2,
-    },
-    pipAlive: {
-      width: 11,
-      height: 15,
-      borderRadius: 3,
-      backgroundColor: '#2b3243',
-      borderWidth: 1,
-      borderColor: theme.colors.goldDark,
-    },
-    pipDead: {
-      width: 15,
-      height: 15,
-      borderRadius: 4,
-      borderWidth: 1.5,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    fanHidden: {
-      opacity: 0,
+    fanTight: {
+      top: -6,
+      gap: 8,
     },
     chipDivider: {
       width: 1,
