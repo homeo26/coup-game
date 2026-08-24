@@ -25,10 +25,15 @@ import Animated, {
   FadeInDown,
   FadeOut,
   LinearTransition,
+  SlideInLeft,
+  SlideInRight,
+  SlideOutLeft,
+  SlideOutRight,
   ZoomIn,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import * as Linking from 'expo-linking';
@@ -169,10 +174,40 @@ export function HomeScreen() {
     takeCode(parseJoinCode(incoming));
   }, [incoming]);
 
+  /**
+   * Switching between the two tiles slides the new controls in from the
+   * side you moved toward, and an indicator glides under the active tile.
+   */
+  const ORDER: Panel[] = ['join', 'offline'];
+  const dir = useRef(1);
+  const [rowW, setRowW] = useState(0);
+  const indicator = useSharedValue(0); // 0 = join, 1 = offline
+  const indicatorShown = useSharedValue(0);
+  const indicatorStyle = useAnimatedStyle(() => {
+    const half = Math.max(0, (rowW - 12) / 2);
+    return {
+      width: half,
+      opacity: indicatorShown.value,
+      transform: [{ translateX: indicator.value * (half + 12) }],
+    };
+  });
+
   const openPanel = (p: Panel) => {
     haptics.selection();
     sound.play('select');
-    setPanel((cur) => (cur === p ? null : p));
+    setPanel((cur) => {
+      const next = cur === p ? null : p;
+      if (next) {
+        const from = cur ? ORDER.indexOf(cur) : ORDER.indexOf(next);
+        const to = ORDER.indexOf(next);
+        dir.current = to >= from ? 1 : -1;
+        indicator.value = withSpring(to, { damping: 18, stiffness: 170 });
+        indicatorShown.value = withTiming(1, { duration: 160 });
+      } else {
+        indicatorShown.value = withTiming(0, { duration: 160 });
+      }
+      return next;
+    });
   };
 
   return (
@@ -251,8 +286,10 @@ export function HomeScreen() {
           {/* ---------- two tiles: join / offline ---------- */}
           <Animated.View
             entering={FadeInDown.duration(400).delay(200)}
+            onLayout={(e) => setRowW(e.nativeEvent.layout.width)}
             style={[styles.tileRow, rtl && styles.rowReverse]}
           >
+            <Animated.View style={[styles.tileIndicator, indicatorStyle]} pointerEvents="none" />
             <Pressy
               scaleTo={0.96}
               onPress={() => openPanel('join')}
@@ -280,11 +317,15 @@ export function HomeScreen() {
           </Animated.View>
 
           {/* ---------- the selected tile's controls ---------- */}
-          <Animated.View layout={LinearTransition.duration(220)} style={styles.panelWrap}>
+          <Animated.View
+            layout={LinearTransition.springify().damping(20).stiffness(160)}
+            style={styles.panelWrap}
+          >
             {panel === 'join' ? (
               <Animated.View
-                entering={FadeInDown.duration(220)}
-                exiting={FadeOut.duration(150)}
+                key="join"
+                entering={(dir.current > 0 ? SlideInRight : SlideInLeft).duration(260)}
+                exiting={(dir.current > 0 ? SlideOutLeft : SlideOutRight).duration(200)}
                 style={[styles.panelBox, { borderColor: roleColors.captain + '55' }]}
               >
                 <View style={[styles.joinRow, rtl && styles.rowReverse]}>
@@ -314,8 +355,9 @@ export function HomeScreen() {
               </Animated.View>
             ) : panel === 'offline' ? (
               <Animated.View
-                entering={FadeInDown.duration(220)}
-                exiting={FadeOut.duration(150)}
+                key="offline"
+                entering={(dir.current > 0 ? SlideInRight : SlideInLeft).duration(260)}
+                exiting={(dir.current > 0 ? SlideOutLeft : SlideOutRight).duration(200)}
                 style={[styles.panelBox, { borderColor: roleColors.ambassador + '55' }]}
               >
                 <View style={[styles.botRow, rtl && styles.rowReverse]}>
@@ -457,6 +499,14 @@ const makeStyles = (theme: Theme) =>
     btnDisabled: { opacity: 0.55 },
 
     tileRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
+    tileIndicator: {
+      position: 'absolute',
+      bottom: -6,
+      left: 0,
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: theme.colors.goldLight,
+    },
     tile: {
       flex: 1,
       height: 74,
@@ -470,7 +520,7 @@ const makeStyles = (theme: Theme) =>
     tileActive: { backgroundColor: theme.colors.surfaceHover },
     tileText: { fontSize: 12.5, fontFamily: font('bold'), color: theme.colors.ink },
 
-    panelWrap: { marginTop: 12 },
+    panelWrap: { marginTop: 14, overflow: 'hidden' },
     panelBox: {
       backgroundColor: theme.colors.surface,
       borderRadius: theme.radius.md,
