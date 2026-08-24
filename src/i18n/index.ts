@@ -40,10 +40,26 @@ export const dict = {
   // Lobby
   lobby: { en: 'Lobby', ar: 'صالة الانتظار' },
   shareCode: { en: 'Share this code with your friends', ar: 'شارك هذا الرمز مع أصدقائك' },
+  shareMessage: {
+    en: 'Join my Coup game — room {code}:\n{link}',
+    ar: 'انضم إلى لعبة كوب — الغرفة {code}:\n{link}',
+  },
   players: { en: 'Players', ar: 'اللاعبون' },
   host: { en: 'Host', ar: 'المضيف' },
   you: { en: 'You', ar: 'أنت' },
   startGame: { en: 'Start game', ar: 'ابدأ اللعبة' },
+  timerTitle: { en: 'Turn timer', ar: 'مؤقّت الدور' },
+  timerOff: { en: 'Off', ar: 'بدون' },
+  timerSecs: { en: '{n}s', ar: '{n} ث' },
+  timerHint: {
+    en: 'Time to decide before the move is made for you.',
+    ar: 'الوقت المتاح للقرار قبل أن يُتخذ عنك.',
+  },
+  timerHintGuest: {
+    en: 'The host sets the turn timer.',
+    ar: 'المضيف يحدّد مؤقّت الدور.',
+  },
+  logTimeout: { en: 'Time ran out', ar: 'انتهى الوقت' },
   needTwo: { en: 'Waiting for at least 2 players…', ar: 'بانتظار لاعبَين على الأقل…' },
   waitingHost: { en: 'Waiting for the host to start…', ar: 'بانتظار المضيف ليبدأ…' },
   leave: { en: 'Leave', ar: 'مغادرة' },

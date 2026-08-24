@@ -59,6 +59,8 @@ export interface Room {
   status: 'lobby' | 'playing';
   roster: RoomPlayer[];
   chat: ChatMsg[];
+  /** Seconds per decision chosen by the host in the lobby (0 = off). */
+  timerSec: number;
   game: GameState | null;
 }
 
@@ -102,6 +104,7 @@ function parseRoom(code: string, data: Record<string, unknown>): Room {
     status: data.status as Room['status'],
     roster: (data.roster as RoomPlayer[]) ?? [],
     chat: (data.chat as ChatMsg[]) ?? [],
+    timerSec: (data.timerSec as number) ?? 0,
     game: data.gameJson ? (JSON.parse(data.gameJson as string) as GameState) : null,
   };
 }
@@ -130,6 +133,7 @@ export async function createRoom(name: string, avatar?: string): Promise<string>
       status: 'lobby',
       roster: [{ id, name, ...(avatar ? { avatar } : {}) }],
       chat: [],
+      timerSec: 0,
       gameJson: null,
       createdAt: serverTimestamp(),
       createdAtMs: Date.now(),
@@ -175,6 +179,18 @@ export async function joinRoom(code: string, name: string, avatar?: string): Pro
   await saveActiveRoom(code);
 }
 
+/** Host picks the per-decision timer (0 / 30 / 60 seconds) in the lobby. */
+export async function setTimer(code: string, timerSec: number): Promise<void> {
+  const id = await getInstallId();
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef(code));
+    if (!snap.exists()) return;
+    const room = parseRoom(code, snap.data()!);
+    if (room.hostId !== id || room.status !== 'lobby') return;
+    tx.update(roomRef(code), { timerSec, updatedAt: serverTimestamp() });
+  });
+}
+
 /** Host starts the game from the lobby. */
 export async function startGame(code: string): Promise<void> {
   const id = await getInstallId();
@@ -184,7 +200,7 @@ export async function startGame(code: string): Promise<void> {
     const room = parseRoom(code, snap.data()!);
     if (room.hostId !== id) throw new Error('not host');
     if (room.status !== 'lobby') return;
-    const game = newGame(room.roster);
+    const game = newGame(room.roster, undefined, room.timerSec);
     tx.update(roomRef(code), {
       status: 'playing',
       gameJson: JSON.stringify(game),
@@ -306,7 +322,7 @@ export async function playAgain(code: string): Promise<void> {
     if (room.hostId !== id) throw new Error('not host');
     if (!room.game || room.game.phase !== 'game_over') return;
     // Keep only players who were in the previous game
-    const game = newGame(room.roster);
+    const game = newGame(room.roster, undefined, room.timerSec);
     tx.update(roomRef(code), {
       gameJson: JSON.stringify(game),
       left: [],

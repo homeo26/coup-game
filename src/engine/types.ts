@@ -100,6 +100,10 @@ export interface GameState {
   winner: string | null;
   /** Player ids in the order they were eliminated (first out first). */
   eliminated: string[];
+  /** Seconds allowed per decision, chosen by the host. 0 = no timer. */
+  timerSec: number;
+  /** Absolute ms deadline for the decision now awaited. 0 = none. */
+  deadlineMs: number;
   log: LogEntry[];
   /** Monotonic move counter (optimistic concurrency). */
   version: number;
@@ -112,7 +116,12 @@ export type Move =
   | { type: 'block'; role: Role }
   | { type: 'lose'; cardIndex: number }
   | { type: 'exchange_keep'; keep: number[] } // indexes into [hand..., drawn...]
-  | { type: 'forfeit' };
+  | { type: 'forfeit' }
+  /** The clock ran out: any player may force the awaited decision. */
+  | { type: 'timeout' };
+
+/** Log entries kept in state; the UI accumulates the full session locally. */
+export const LOG_CAP = 80;
 
 export interface MoveResult {
   state: GameState;

@@ -180,6 +180,9 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   on launch. Leaving a lobby removes you from the roster (host leaving
   deletes the room); leaving a live game forfeits.
 - Room codes: 4 letters from `ABCDEFGHJKLMNPQRSTUVWXYZ` (no I/O).
+- The game log is capped at the newest 80 entries (`LOG_CAP`) so
+  `gameJson` can't creep toward the 100 KB size rule in a long game; the
+  history modal shows that rolling window.
 - **Garbage collection** (no server, so clients clean up):
   - Leaving a playing room records the leaver in a `left[]` field; the
     last participant to leave **deletes the doc**.
@@ -187,6 +190,30 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
     sweeps finished games older than 2h — chat, history, everything —
     plus any room older than 24h (`createdAtMs`).
   - `playAgain` resets `left`, clears `chat` and `finishedAtMs`.
+
+### Turn timer
+
+- The host picks **off / 30s / 60s** in the lobby (`timerSec` on the room
+  doc, copied into `GameState.timerSec` when the game starts).
+- Every successful move stamps `deadlineMs = now + timerSec`, so each
+  decision gets a fresh clock — turns, challenge/block windows, card
+  losses and exchanges alike.
+- `{ type: 'timeout' }` may be committed by **any living player** once the
+  deadline has passed (the player on the clock fires immediately, others
+  after a 2s grace, so an absent player can't freeze the table). It
+  resolves the wait in the least damaging way: the turn holder takes
+  Income (or the forced Coup at 10+), pending responders all pass, a card
+  loss reveals the first card, an exchange keeps the current hand.
+- Clients show a countdown chip in the header, red under 5 seconds.
+
+### Deep links
+
+- A room is shareable as `https://coup-game-rooms.web.app/join/ABCD`
+  (Android App Link, verified via `/.well-known/assetlinks.json`) or
+  `coupgame://join/ABCD`. The hosted page hands off to the app and offers
+  the install to anyone who doesn't have it.
+- `app/join/[code].tsx` stashes the code and redirects to the tab host;
+  Home pre-fills it and joins straight away when a name is already known.
 
 ### Offline mode (vs bots)
 

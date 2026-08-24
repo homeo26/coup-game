@@ -13,6 +13,7 @@ import { Avatar } from '../components/Avatar';
 import { Breathing } from '../components/Breathing';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useRoom } from '../net/RoomContext';
+import { joinLink } from '../net/deeplink';
 import { useSettings } from '../settings';
 import { t, isRTL } from '../i18n';
 import { MIN_PLAYERS } from '../engine/engine';
@@ -23,7 +24,7 @@ export function LobbyScreen() {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
   const { lang } = useSettings();
-  const { room, myId, start, leave } = useRoom();
+  const { room, myId, start, leave, setTimer } = useRoom();
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   const [starting, setStarting] = useState(false);
   void lang;
@@ -66,7 +67,9 @@ export function LobbyScreen() {
 
   const shareCode = () => {
     haptics.light();
-    Share.share({ message: `Coup — ${t('roomCode')}: ${room.code}` }).catch(() => {});
+    Share.share({
+      message: t('shareMessage', { code: room.code, link: joinLink(room.code) }),
+    }).catch(() => {});
   };
 
   return (
@@ -90,6 +93,34 @@ export function LobbyScreen() {
           <Text style={styles.shareHint}>{t('shareCode')}</Text>
         </View>
       </Animated.View>
+
+      <Text style={[styles.section, rtl && styles.rtlText]}>{t('timerTitle')}</Text>
+      <View style={[styles.timerRow, rtl && styles.rowReverse]}>
+        {[0, 30, 60].map((secs) => {
+          const selected = (room.timerSec ?? 0) === secs;
+          return (
+            <Pressy
+              key={secs}
+              scaleTo={0.94}
+              disabled={!isHost}
+              noDimWhenDisabled
+              onPress={() => {
+                haptics.selection();
+                sound.play('select');
+                setTimer(secs);
+              }}
+              style={[styles.timerChip, selected && styles.timerChipSel]}
+            >
+              <Text style={[styles.timerChipText, selected && styles.timerChipTextSel]}>
+                {secs === 0 ? t('timerOff') : t('timerSecs', { n: secs })}
+              </Text>
+            </Pressy>
+          );
+        })}
+      </View>
+      <Text style={[styles.timerHint, rtl && styles.rtlText]}>
+        {isHost ? t('timerHint') : t('timerHintGuest')}
+      </Text>
 
       <Text style={[styles.section, rtl && styles.rtlText]}>
         {t('players')} ({room.roster.length}/6)
@@ -221,6 +252,39 @@ const makeStyles = (theme: Theme) =>
     list: {
       paddingHorizontal: 20,
       gap: 8,
+    },
+    timerRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 6,
+    },
+    timerChip: {
+      flex: 1,
+      height: 44,
+      borderRadius: theme.radius.md,
+      borderWidth: 1.5,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    timerChipSel: {
+      borderColor: theme.colors.gold,
+      backgroundColor: theme.colors.surfaceHover,
+    },
+    timerChipText: {
+      fontSize: 13.5,
+      fontFamily: font('bold'),
+      color: theme.colors.inkSoft,
+    },
+    timerChipTextSel: {
+      color: theme.colors.goldLight,
+    },
+    timerHint: {
+      fontSize: 11.5,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkFaint,
+      marginBottom: 14,
     },
     playerRow: {
       flexDirection: 'row',

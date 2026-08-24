@@ -140,9 +140,12 @@ const makeStyles = (theme: Theme) =>
       fontFamily: font('bold'),
     },
     selected: {
+      // NOTE: no elevation/shadow here on purpose. This view uses
+      // overflow:'hidden' for the card art, and toggling elevation on a
+      // clipped view makes Fabric drop its contents — which showed up as
+      // a card vanishing when it was de-selected in the exchange picker.
       borderColor: theme.colors.goldLight,
-      borderWidth: 2.5,
-      ...theme.shadow.goldGlow,
+      borderWidth: 3,
     },
     dead: {
       // killed cards stay clearly readable — they are public information

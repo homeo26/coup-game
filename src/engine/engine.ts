@@ -18,6 +18,7 @@ import {
   ActionType,
   BLOCK_ROLES,
   GameState,
+  LOG_CAP,
   LogEntry,
   Move,
   MoveResult,
@@ -61,6 +62,9 @@ function alivePlayers(s: GameState): PlayerState[] {
 
 function log(s: GameState, key: string, params?: LogEntry['params']) {
   s.log.push({ key, ...(params ? { params } : {}) });
+  // Keep the state bounded: the doc carries a rolling window, while the
+  // UI accumulates the full session history locally.
+  if (s.log.length > LOG_CAP) s.log.splice(0, s.log.length - LOG_CAP);
 }
 
 function nameOf(s: GameState, id: string): string {
@@ -105,6 +109,7 @@ export const MAX_PLAYERS = 6;
 export function newGame(
   roster: { id: string; name: string }[],
   rand: () => number = Math.random,
+  timerSec = 0,
 ): GameState {
   if (roster.length < MIN_PLAYERS || roster.length > MAX_PLAYERS) {
     throw new Error('players must be 2-6');
@@ -131,6 +136,8 @@ export function newGame(
     lossQueue: [],
     winner: null,
     eliminated: [],
+    timerSec,
+    deadlineMs: 0,
     log: [],
     version: 0,
   };
@@ -140,25 +147,43 @@ export function newGame(
 /* Reducer                                                             */
 /* ------------------------------------------------------------------ */
 
-export function apply(prev: GameState, playerId: string, move: Move): MoveResult {
+export function apply(
+  prev: GameState,
+  playerId: string,
+  move: Move,
+  nowMs: number = Date.now(),
+): MoveResult {
   // Deep clone: the reducer mutates its working copy freely.
   const s: GameState = JSON.parse(JSON.stringify(prev));
   s.eliminated = s.eliminated ?? []; // migrate pre-standings saves
+  s.timerSec = s.timerSec ?? 0; // migrate pre-timer saves
+  s.deadlineMs = s.deadlineMs ?? 0;
   try {
-    applyMove(s, playerId, move);
+    applyMove(s, playerId, move, nowMs);
   } catch (e) {
     return { state: prev, error: e instanceof Error ? e.message : String(e) };
   }
+  // Every decision gets a fresh clock.
+  s.deadlineMs = s.timerSec > 0 && s.phase !== 'game_over' ? nowMs + s.timerSec * 1000 : 0;
   s.version = prev.version + 1;
   return { state: s };
 }
 
-function applyMove(s: GameState, playerId: string, move: Move) {
+function applyMove(s: GameState, playerId: string, move: Move, nowMs: number) {
   if (s.phase === 'game_over') throw new Error('game over');
   const me = player(s, playerId);
 
   if (move.type === 'forfeit') {
     forfeit(s, playerId);
+    return;
+  }
+  if (move.type === 'timeout') {
+    // Any living player may force the clock once it has expired, so an
+    // absent player can never freeze the table.
+    if (!s.timerSec || !s.deadlineMs) throw new Error('no timer');
+    if (nowMs < s.deadlineMs) throw new Error('too early');
+    if (!isAlive(me)) throw new Error('eliminated');
+    forceTimeout(s);
     return;
   }
   if (!isAlive(me)) throw new Error('eliminated');
@@ -593,6 +618,61 @@ function endTurn(s: GameState) {
   }
   // No alive player found — should be unreachable (checkWin fires first)
   s.phase = 'game_over';
+}
+
+/* ------------------------------------------------------------------ */
+/* Timeouts                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Resolve whatever the table is waiting for in the least damaging way:
+ * the turn holder takes Income (or the forced Coup), pending responders
+ * all pass, a card loss reveals the first card, and an exchange keeps
+ * the hand as it is.
+ */
+function forceTimeout(s: GameState) {
+  log(s, 'logTimeout');
+  if (s.phase === 'action') {
+    const actor = s.players[s.turn];
+    if (actor.coins >= 10) {
+      const target = alivePlayers(s).find((p) => p.id !== actor.id);
+      if (target) {
+        declare(s, actor, 'coup', target.id);
+        return;
+      }
+    }
+    declare(s, actor, 'income');
+    return;
+  }
+  if (s.phase === 'lose_card') {
+    const head = s.lossQueue[0];
+    if (head) {
+      const p = player(s, head.playerId);
+      const idx = p.cards.findIndex((c) => !c.revealed);
+      if (idx >= 0) {
+        revealCard(s, p, idx);
+        s.lossQueue.shift();
+        afterLossProgress(s);
+        return;
+      }
+    }
+    return;
+  }
+  if (s.phase === 'exchange' && s.pending) {
+    const me = player(s, s.pending.actor);
+    const keep = me.cards
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => !c.revealed)
+      .map((_, n) => n); // keep the current hand, return what was drawn
+    finishExchange(s, me, keep);
+    return;
+  }
+  // a response window: everyone still owing simply passes
+  const owed = pendingResponders(s);
+  if (owed.length > 0 && s.pending) {
+    s.pending.passed.push(...owed);
+    closeWindow(s);
+  }
 }
 
 /* ------------------------------------------------------------------ */

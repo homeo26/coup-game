@@ -2,7 +2,7 @@
  * HomeScreen — landing: logo, player name, create a room or join one
  * with a 4-letter code. Shown when no room is active.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Keyboard,
@@ -23,7 +23,9 @@ import { Breathing } from '../components/Breathing';
 import { ANIMALS, Avatar } from '../components/Avatar';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useSettings } from '../settings';
+import * as Linking from 'expo-linking';
 import { useRoom } from '../net/RoomContext';
+import { consumePendingJoin, onPendingJoin, parseJoinCode } from '../net/deeplink';
 import { t, TKey, isRTL } from '../i18n';
 import * as haptics from '../haptics';
 
@@ -40,6 +42,33 @@ export function HomeScreen() {
   void lang; // re-render on language change
 
   const effectiveName = (name ?? playerName).trim();
+
+  /**
+   * A shared link (coupgame://join/ABCD or the hosted https page) drops
+   * the code straight into the join field — and joins immediately when we
+   * already know the player's name.
+   */
+  const incoming = Linking.useURL();
+  const handled = useRef<string | null>(null);
+  const takeCode = (code: string | null) => {
+    if (!code || handled.current === code) return;
+    handled.current = code;
+    setCodeInput(code);
+    const who = (name ?? playerName).trim();
+    if (who && !busy) {
+      haptics.medium();
+      join(code, who).catch((e) => fail(e));
+    }
+  };
+  // the /join/[code] route stashes the code before redirecting here
+  useEffect(() => {
+    takeCode(consumePendingJoin());
+    return onPendingJoin(takeCode);
+  }, []);
+  // and a raw URL (bare scheme, or a link opened while we're running)
+  useEffect(() => {
+    takeCode(parseJoinCode(incoming));
+  }, [incoming]);
 
   const remember = () => {
     if (effectiveName && effectiveName !== playerName) set('playerName', effectiveName);

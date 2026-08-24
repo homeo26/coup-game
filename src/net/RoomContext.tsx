@@ -28,6 +28,7 @@ import {
   playAgain,
   saveActiveRoom,
   sendChat as sendChatRemote,
+  setTimer as setTimerRemote,
   startGame,
   watchRoom,
   CHAT_CAP,
@@ -51,6 +52,8 @@ interface RoomState {
   start: () => Promise<void>;
   move: (m: Move) => Promise<string | null>;
   sendChat: (msg: Omit<ChatMsg, 'u' | 'ts'>) => Promise<void>;
+  /** Host: per-decision timer for the next game (0 / 30 / 60 seconds). */
+  setTimer: (timerSec: number) => Promise<void>;
   leave: () => Promise<void>;
   again: () => Promise<void>;
 }
@@ -67,6 +70,7 @@ const RoomContext = createContext<RoomState>({
   start: async () => {},
   move: async () => null,
   sendChat: async () => {},
+  setTimer: async () => {},
   leave: async () => {},
   again: async () => {},
 });
@@ -245,6 +249,13 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     [code, localGame, myId],
   );
 
+  const setTimer = useCallback(
+    async (timerSec: number) => {
+      if (code) await setTimerRemote(code, timerSec).catch(() => {});
+    },
+    [code],
+  );
+
   const leave = useCallback(async () => {
     if (localGame) {
       if (botTimer.current) clearTimeout(botTimer.current);
@@ -279,6 +290,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
           avatar: p.id === myId ? getSettings().avatar : ROLES_FOR_BOTS[(parseInt(p.id.split('-')[1] ?? '1', 10) - 1) % 5],
         })),
         chat: localChat,
+        timerSec: 0,
         game: localGame,
       };
     }
@@ -298,10 +310,26 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       start,
       move,
       sendChat,
+      setTimer,
       leave,
       again,
     }),
-    [myId, code, effectiveRoom, isLocal, busy, create, join, playLocal, start, move, sendChat, leave, again],
+    [
+      myId,
+      code,
+      effectiveRoom,
+      isLocal,
+      busy,
+      create,
+      join,
+      playLocal,
+      start,
+      move,
+      sendChat,
+      setTimer,
+      leave,
+      again,
+    ],
   );
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;

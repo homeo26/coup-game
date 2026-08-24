@@ -541,5 +541,71 @@ test("actor forfeit still collects the failed challenger's loss", () => {
 
 /* ------------------------------------------------------------------ */
 
+test('log is capped so gameJson cannot grow unbounded', () => {
+  let s = rig({ a: ['duke', 'duke'], b: ['captain', 'captain'] }, ['ambassador']);
+  for (let i = 0; i < 120; i++) {
+    const me = s.players[s.turn];
+    s = mv(s, me.id, { type: 'declare', action: 'income' });
+    s.players.forEach((p) => (p.coins = 0)); // stay under the 10-coin rule
+  }
+  assert(s.log.length <= 80, `log capped (got ${s.log.length})`);
+  eq(s.log[s.log.length - 1].key, 'logIncome', 'newest entry kept');
+});
+
+test('turn timer: timeout is rejected early, then forces the decision', () => {
+  const roster = [
+    { id: 'a', name: 'A' },
+    { id: 'b', name: 'B' },
+    { id: 'c', name: 'C' },
+  ];
+  let s = newGame(roster, () => 0.5, 30);
+  assert(s.timerSec === 30, 'timer stored on the game');
+  const started = 1_000_000;
+  s = apply(s, 'a', { type: 'declare', action: 'income' }, started).state;
+  assert(s.deadlineMs === started + 30_000, 'deadline set from the clock');
+
+  // b is on the clock; too early to force
+  const early = apply(s, 'c', { type: 'timeout' }, started + 5_000);
+  assert(!!early.error, 'timeout rejected before the deadline');
+
+  // once expired, ANY player can force it — b takes Income
+  const coinsBefore = P(s, 'b').coins;
+  const forced = apply(s, 'c', { type: 'timeout' }, started + 31_000);
+  eq(forced.error, undefined, 'timeout accepted after the deadline');
+  eq(P(forced.state, 'b').coins, coinsBefore + 1, 'turn holder auto-took Income');
+  eq(forced.state.players[forced.state.turn].id, 'c', 'turn moved on');
+});
+
+test('turn timer: a response window times out as passes', () => {
+  let s = rig({ a: ['duke', 'duke'], b: ['captain', 'captain'], c: ['contessa', 'contessa'] }, [
+    'ambassador',
+  ]);
+  s.timerSec = 30;
+  const t0 = 5_000_000;
+  s = apply(s, 'a', { type: 'declare', action: 'tax' }, t0).state;
+  eq(s.phase, 'action_challenge', 'challenge window open');
+  const r = apply(s, 'a', { type: 'timeout' }, t0 + 30_001);
+  eq(r.error, undefined, 'window forced');
+  eq(r.state.phase, 'action', 'tax resolved and the turn ended');
+  eq(P(r.state, 'a').coins, P(s, 'a').coins + 3, 'tax paid out');
+});
+
+test('turn timer: forced coup when the actor is over the 10-coin limit', () => {
+  let s = rig({ a: ['duke', 'duke'], b: ['captain', 'captain'] }, ['ambassador'], { a: 10 });
+  s.timerSec = 30;
+  s.deadlineMs = 1;
+  const r = apply(s, 'b', { type: 'timeout' }, 10_000);
+  eq(r.error, undefined, 'timeout accepted');
+  assert(influence(P(r.state, 'b')) === 1 || r.state.phase === 'lose_card', 'coup was launched');
+});
+
+test('no timer means timeouts are rejected outright', () => {
+  const s = rig({ a: ['duke', 'duke'], b: ['captain', 'captain'] }, ['ambassador']);
+  const r = apply(s, 'b', { type: 'timeout' }, Date.now() + 10_000_000);
+  assert(!!r.error, 'rejected when the host set no timer');
+});
+
+/* ------------------------------------------------------------------ */
+
 console.log(`\n${passed} assertions passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -37,6 +37,11 @@ coup_rooms/{code}")]
     FS -->|"live snapshots"| Devices
 ```
 
+Rooms are shareable as links — `https://coup-game-rooms.web.app/join/ABCD`
+opens straight into the app (or offers the install), so nobody has to
+dictate a code. The host can also set a **30s or 60s turn timer**; when it
+expires the table moves on by itself instead of stalling.
+
 No backend server. The full `GameState` lives in a single Firestore doc
 as JSON; every move runs the **pure rules engine** locally and commits
 the resulting state in a transaction (optimistic concurrency — stale

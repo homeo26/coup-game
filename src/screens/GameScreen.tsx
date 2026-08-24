@@ -587,6 +587,7 @@ export function GameScreen() {
   const [sheetH, setSheetH] = useState(0);
   const [myAreaH, setMyAreaH] = useState(0);
   const [tableBox, setTableBox] = useState({ w: 0, h: 0 });
+  const [secsLeft, setSecsLeft] = useState<number | null>(null);
   const [fly, setFly] = useState<{ key: number; from: { x: number; y: number } } | null>(null);
   const [deals, setDeals] = useState<
     { key: string; to: { x: number; y: number }; delay: number }[]
@@ -662,6 +663,37 @@ export function GameScreen() {
     setLoseIdx(null);
     setKeepIdxs([]);
   }, [g?.version]);
+
+  /**
+   * Turn clock. Every client ticks the same deadline from the game
+   * state; whoever owes the decision fires the timeout first, and any
+   * other player may force it a moment later so an absent player can
+   * never freeze the table.
+   */
+  const deadline = g?.deadlineMs ?? 0;
+  const timerOn = !!g?.timerSec && deadline > 0 && g?.phase !== 'game_over';
+  const firedFor = useRef(0);
+  useEffect(() => {
+    if (!timerOn) {
+      setSecsLeft(null);
+      return;
+    }
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setSecsLeft(left);
+      if (left > 0 || firedFor.current === deadline) return;
+      // grace period: the player on the clock fires immediately, others
+      // only after 2s, so we don't race for the same write
+      const grace = needsMe ? 0 : 2000;
+      if (Date.now() >= deadline + grace) {
+        firedFor.current = deadline;
+        move({ type: 'timeout' }).catch(() => {});
+      }
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [timerOn, deadline, needsMe, move]);
 
   // A fresh game opens with a shuffle and a deal: two cards sail from
   // the Court to every seat around the table.
@@ -1104,6 +1136,25 @@ export function GameScreen() {
           <Ionicons name="exit-outline" size={19} color={theme.colors.danger} />
         </Pressy>
         <Text style={styles.roomCode}>{room!.code}</Text>
+        {secsLeft !== null ? (
+          <View
+            style={[
+              styles.clockChip,
+              secsLeft <= 5 && { borderColor: theme.colors.danger },
+            ]}
+          >
+            <Ionicons
+              name="time-outline"
+              size={13}
+              color={secsLeft <= 5 ? theme.colors.danger : theme.colors.inkSoft}
+            />
+            <Text
+              style={[styles.clockText, secsLeft <= 5 && { color: theme.colors.danger }]}
+            >
+              {secsLeft}
+            </Text>
+          </View>
+        ) : null}
         <Pressy
           scaleTo={0.92}
           style={[styles.deckChip, rtl && styles.rowReverse]}
@@ -1478,6 +1529,24 @@ const makeStyles = (theme: Theme) =>
       fontFamily: latinFont('bold'),
       letterSpacing: 6,
       color: theme.colors.goldLight,
+    },
+    clockChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      borderWidth: 1.5,
+      borderColor: theme.colors.borderBright,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: 9,
+      height: 28,
+      backgroundColor: 'rgba(8,10,14,0.85)',
+    },
+    clockText: {
+      fontSize: 13,
+      fontFamily: latinFont('bold'),
+      color: theme.colors.ink,
+      minWidth: 16,
+      textAlign: 'center',
     },
     deckChip: {
       flexDirection: 'row',
