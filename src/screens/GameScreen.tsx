@@ -134,6 +134,27 @@ function logMeta(e: LogEntry, th: Theme): { icon: keyof typeof Ionicons.glyphMap
   }
 }
 
+/**
+ * Events that always deserve a floating banner. On a crowded table the
+ * routine coin actions are left to the log strip so the felt stays clear.
+ */
+const BANNER_ALWAYS = new Set([
+  'logChallenge',
+  'logChallengeFailed',
+  'logChallengeWon',
+  'logBlockDeclared',
+  'logForeignAidBlocked',
+  'logStealBlocked',
+  'logAssassinateBlocked',
+  'logCoup',
+  'logAssassinate',
+  'logLostCard',
+  'logEliminated',
+  'logForfeit',
+  'logTimeout',
+  'logWinner',
+]);
+
 /** Which cue a game event plays (null = silent). */
 function logSound(key: string, role?: string): sound.SoundKey | null {
   // A claimed character announces itself in its own voice.
@@ -199,6 +220,35 @@ function CoinDelta({ delta }: { delta: number }) {
         {delta > 0 ? `+${delta}` : delta}
       </Text>
     </Animated.View>
+  );
+}
+
+/**
+ * Influence shown as small pips instead of a card fan. On a crowded table
+ * ten opponent cards is just noise — the pips say how much influence each
+ * player still holds, and a lost one carries the dead character's colour
+ * (the discard piles by the Court still show exactly what died).
+ */
+function InfluencePips({ cards }: { cards: { role: Role; revealed: boolean }[] }) {
+  const styles = useStyles(makeStyles);
+  return (
+    <View style={styles.pipRow}>
+      {cards.map((c, i) =>
+        c.revealed ? (
+          <View
+            key={i}
+            style={[
+              styles.pipDead,
+              { borderColor: roleColors[c.role], backgroundColor: roleColors[c.role] + '33' },
+            ]}
+          >
+            <RoleArt role={c.role} size={9} color={roleColors[c.role]} />
+          </View>
+        ) : (
+          <View key={i} style={styles.pipAlive} />
+        ),
+      )}
+    </View>
   );
 }
 
@@ -290,6 +340,7 @@ function TableSeat({
   compact,
   claim,
   passed,
+  dense,
 }: {
   p: PlayerState;
   avatar?: string;
@@ -309,13 +360,15 @@ function TableSeat({
   claim?: Role | null;
   /** They have already answered the open response window. */
   passed?: boolean;
+  /** Crowded table: shrink, swap the card fan for pips, fold coins in. */
+  dense?: boolean;
 }) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
   const dead = !isAlive(p);
-  const AV = compact ? 44 : 58;      // avatar size
-  const CARD = compact ? 34 : 44;    // fan card width
-  const COIN = compact ? 14 : 18;    // coin glyph size
+  const AV = compact ? (dense ? 38 : 44) : dense ? 48 : 58; // avatar size
+  const CARD = compact ? 34 : 44; // fan card width
+  const COIN = dense ? 13 : compact ? 14 : 18; // coin glyph size
 
   // A gentle scale nudge when the turn arrives at this seat
   const nudge = useSharedValue(1);
@@ -376,8 +429,9 @@ function TableSeat({
         style={styles.seatInner}
       >
         {/* card fan peeking from behind the avatar; a killed character
-            shows as a real face-up card at card proportions */}
-        <View style={styles.fan} pointerEvents="none">
+            shows as a real face-up card at card proportions. On a crowded
+            table the fan is replaced by pips under the name. */}
+        <View style={[styles.fan, dense && !showFaces && styles.fanHidden]} pointerEvents="none">
           {p.cards.map((c, i) =>
             c.revealed || showFaces ? (
               <Animated.View
@@ -467,11 +521,19 @@ function TableSeat({
           >
             {claim ? `${p.name} · ${t(claim as TKey)}` : p.name}
           </Text>
+          {dense && !dead ? (
+            <>
+              <View style={styles.chipDivider} />
+              <CoinIcon size={12} />
+              <Text style={styles.chipCoins}>{p.coins}</Text>
+            </>
+          ) : null}
         </Animated.View>
+        {dense && !showFaces ? <InfluencePips cards={p.cards} /> : null}
         {dead ? (
           <Text style={styles.deadLabel}>{t('eliminated')}</Text>
-        ) : (
-          <AnimatedCoins amount={p.coins} size={15} chip />
+        ) : dense ? null : (
+          <AnimatedCoins amount={p.coins} size={COIN} chip />
         )}
       </Pressy>
       {emote ? (
@@ -587,19 +649,28 @@ function DiscardPiles({ g, onPress }: { g: GameState; onPress?: () => void }) {
   if (piles.length === 0) return null;
   return (
     <Pressy scaleTo={0.95} onPress={onPress} style={styles.pilesRow}>
-      {piles.map(({ role, n }) => (
-        <View key={role} style={{ width: CARD_W, height: CARD_H + (n - 1) * STEP }}>
-          {Array.from({ length: n }).map((_, i) => (
-            <Animated.View
-              key={i}
-              entering={FlipInEasyY.duration(450)}
-              style={{ position: 'absolute', top: i * STEP }}
-            >
-              <InfluenceCard role={role} dead width={CARD_W} />
-            </Animated.View>
-          ))}
-        </View>
-      ))}
+      {piles.map(({ role, n }) => {
+        // never cascade more than two cards — deep piles carry a count
+        const shown = Math.min(n, 2);
+        return (
+          <View key={role} style={{ width: CARD_W, height: CARD_H + (shown - 1) * STEP }}>
+            {Array.from({ length: shown }).map((_, i) => (
+              <Animated.View
+                key={i}
+                entering={FlipInEasyY.duration(450)}
+                style={{ position: 'absolute', top: i * STEP }}
+              >
+                <InfluenceCard role={role} dead width={CARD_W} />
+              </Animated.View>
+            ))}
+            {n > 2 ? (
+              <View style={styles.pileCount}>
+                <Text style={styles.pileCountText}>{n}</Text>
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
     </Pressy>
   );
 }
@@ -693,6 +764,7 @@ export function GameScreen() {
   const [myAreaH, setMyAreaH] = useState(0);
   const [tableBox, setTableBox] = useState({ w: 0, h: 0 });
   const [secsLeft, setSecsLeft] = useState<number | null>(null);
+  const denseRef = useRef(false);
   const [peek, setPeek] = useState<Role | null>(null);
   const [fly, setFly] = useState<{ key: number; from: { x: number; y: number } } | null>(null);
   const [deals, setDeals] = useState<
@@ -912,15 +984,21 @@ export function GameScreen() {
           setTimeout(() => setFly((f) => (f?.key === logLen ? null : f)), 600);
         }
       }
-      setBanner({ entry, key: logLen });
-      const timer = setTimeout(() => setBanner((b) => (b?.key === logLen ? null : b)), 2100);
-      return () => clearTimeout(timer);
+      const bigEvent = BANNER_ALWAYS.has(entry.key);
+      if (!denseRef.current || bigEvent) {
+        setBanner({ entry, key: logLen });
+        const timer = setTimeout(() => setBanner((b) => (b?.key === logLen ? null : b)), 2100);
+        return () => clearTimeout(timer);
+      }
     }
   }, [logLen, g]);
 
   if (!g || !me) return null;
   const rtl = isRTL();
   const opponents = g.players.filter((p) => p.id !== me.id);
+  /** Crowded table (5-6 players): thin everything out. */
+  const dense = opponents.length >= 4;
+  denseRef.current = dense;
 
   const dispatch = async (m: Parameters<typeof move>[0]) => {
     if (sending) return;
@@ -1502,6 +1580,7 @@ export function GameScreen() {
             compact={needsMe && g.phase !== 'game_over'}
             claim={claimOf(p.id)}
             passed={hasPassed(p.id)}
+            dense={dense}
             onTarget={() => {
               if (!targetable(p)) return;
               haptics.selection();
@@ -1572,6 +1651,7 @@ export function GameScreen() {
           compact={needsMe && g.phase !== 'game_over'}
           claim={claimOf(me.id)}
           passed={hasPassed(me.id)}
+          dense={dense}
           showFaces
         />
       </Animated.View>
@@ -1939,6 +2019,25 @@ const makeStyles = (theme: Theme) =>
       borderWidth: 1.5,
       borderColor: theme.colors.goldDark,
     },
+    pileCount: {
+      position: 'absolute',
+      right: -6,
+      bottom: -6,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      paddingHorizontal: 4,
+      backgroundColor: '#05070a',
+      borderWidth: 1.5,
+      borderColor: theme.colors.goldLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    pileCountText: {
+      fontSize: 10.5,
+      fontFamily: latinFont('bold'),
+      color: '#ffffff',
+    },
     centerRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -2072,6 +2171,41 @@ const makeStyles = (theme: Theme) =>
       backgroundColor: theme.colors.success,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    pipRow: {
+      flexDirection: 'row',
+      gap: 4,
+      marginTop: 2,
+    },
+    pipAlive: {
+      width: 11,
+      height: 15,
+      borderRadius: 3,
+      backgroundColor: '#2b3243',
+      borderWidth: 1,
+      borderColor: theme.colors.goldDark,
+    },
+    pipDead: {
+      width: 15,
+      height: 15,
+      borderRadius: 4,
+      borderWidth: 1.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fanHidden: {
+      opacity: 0,
+    },
+    chipDivider: {
+      width: 1,
+      height: 11,
+      backgroundColor: 'rgba(233,235,240,0.25)',
+      marginHorizontal: 1,
+    },
+    chipCoins: {
+      fontSize: 11,
+      fontFamily: latinFont('bold'),
+      color: '#ffffff',
     },
     seatNameChip: {
       flexDirection: 'row',

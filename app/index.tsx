@@ -51,14 +51,20 @@ export default function TabsHost() {
     sound.warmup();
   }, []);
 
+  // The table gets the driving heist track; menus keep the calm inn loop.
+  const scene: music.Scene = room?.status === 'playing' ? 'table' : 'menu';
+  useEffect(() => {
+    music.setScene(scene);
+  }, [scene]);
+
   // Music plays everywhere in the app (home included) while the toggle
   // is on, and pauses whenever the app goes to the background.
   useEffect(() => {
-    if (musicOn) music.start();
+    if (musicOn) music.start(scene);
     else music.stop();
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        if (musicOn) music.start();
+        if (musicOn) music.start(scene);
       } else {
         music.stop();
       }

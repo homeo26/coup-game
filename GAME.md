@@ -289,8 +289,9 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   Pack, CC0) on the Home screen (persisted); shown in the lobby, table
   seats, chat and final standings. Offline bots get distinct animals.
   Legacy character-portrait avatars from old clients still render.
-- **Table music**: a quiet CC0 inn loop plays app-wide (settings
-  toggle), pausing when the app is backgrounded.
+- **Music** (settings toggle, pauses when backgrounded): two CC0 scenes
+  that cross-fade — a calm inn loop on the menus, and a driving heist
+  track once a game is in progress.
 - **Character voices**: each character announces its own action in a
   distinct voice — Duke "takes three coins", Captain "steals two coins",
   Ambassador "exchanges with the Court", Assassin "strikes, lose one

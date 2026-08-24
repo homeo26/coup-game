@@ -144,8 +144,10 @@ firebase deploy --only firestore:rules
 
 Sound effects from [Kenney](https://kenney.nl)'s *Casino Audio* and
 *Interface Sounds* packs, avatars from Kenney's *Animal Pack* (all
-CC0 — public domain). Table music: "The Old Tower Inn" by Alexandr
-Zhelanov ([opengameart.org](https://opengameart.org/content/medieval-the-old-tower-inn), CC0).
+CC0 — public domain). Music: "The Old Tower Inn" by Alexandr Zhelanov
+([opengameart.org](https://opengameart.org/content/medieval-the-old-tower-inn), CC0) on the
+menus, and "Backup Plan" by Zane Little Music
+([opengameart.org](https://opengameart.org/content/backup-plan), CC0) at the table.
 
 ## License
 
