@@ -12,8 +12,9 @@ import { Pressy } from './Pressy';
 import { t } from '../i18n';
 
 export type TabName = 'play' | 'chat' | 'rules' | 'settings';
-/** Page order inside the pager — fixed; the chat BUTTON hides when idle. */
-export const TAB_ORDER: TabName[] = ['play', 'chat', 'rules', 'settings'];
+/** Pages when in a room (chat included) and when idle (chat absent). */
+export const TABS_IN_ROOM: TabName[] = ['play', 'chat', 'rules', 'settings'];
+export const TABS_IDLE: TabName[] = ['play', 'rules', 'settings'];
 
 const ICONS: Record<TabName, keyof typeof Ionicons.glyphMap> = {
   play: 'game-controller',
@@ -23,15 +24,15 @@ const ICONS: Record<TabName, keyof typeof Ionicons.glyphMap> = {
 };
 
 interface Props {
+  /** The pager's current page list — the bar mirrors it exactly. */
+  tabs: TabName[];
   activeIndex: number;
   onPress: (index: number) => void;
-  /** Chat tab is only offered while in a room. */
-  showChat: boolean;
   /** Unread chat messages since the tab was last open. */
   chatBadge: number;
 }
 
-export function TabBar({ activeIndex, onPress, showChat, chatBadge }: Props) {
+export function TabBar({ tabs, activeIndex, onPress, chatBadge }: Props) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
@@ -44,8 +45,7 @@ export function TabBar({ activeIndex, onPress, showChat, chatBadge }: Props) {
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-      {TAB_ORDER.map((tab, index) => {
-        if (tab === 'chat' && !showChat) return null;
+      {tabs.map((tab, index) => {
         const focused = activeIndex === index;
         return (
           <Pressy

@@ -57,7 +57,9 @@ function rig(
   );
   s.players.forEach((p) => {
     p.cards = hands[p.id].map((role) => ({ role, revealed: false }));
-    if (coins && coins[p.id] !== undefined) p.coins = coins[p.id];
+    // rigs start everyone on 2 coins regardless of the official 2-player
+    // opening (that rule has its own test) unless the case overrides it
+    p.coins = coins && coins[p.id] !== undefined ? coins[p.id] : 2;
   });
   s.deck = [...deck];
   return s;
@@ -203,9 +205,11 @@ test('steal from a player with 1 coin takes only 1', () => {
   eq(P(s, 'b').coins, 0, 'b at 0');
 });
 
-test('steal from 0 coins is rejected', () => {
+test('stealing from a broke player is allowed (the rules only cap the amount)', () => {
   const s = rig({ a: ['captain', 'contessa'], b: ['duke', 'duke'] }, ['duke'], { a: 2, b: 0 });
-  expectError(s, 'a', { type: 'declare', action: 'steal', target: 'b' }, 'steal from broke player');
+  const r = apply(s, 'a', { type: 'declare', action: 'steal', target: 'b' });
+  eq(r.error, undefined, 'declaration accepted');
+  eq(r.state.phase, 'action_challenge', 'the Captain claim can be challenged');
 });
 
 test('steal blocked by ambassador claim (unchallenged): no transfer', () => {
@@ -603,6 +607,47 @@ test('no timer means timeouts are rejected outright', () => {
   const s = rig({ a: ['duke', 'duke'], b: ['captain', 'captain'] }, ['ambassador']);
   const r = apply(s, 'b', { type: 'timeout' }, Date.now() + 10_000_000);
   assert(!!r.error, 'rejected when the host set no timer');
+});
+
+/* ------------------------------------------------------------------ */
+
+test('two-player game: the starting player begins with 1 coin', () => {
+  const two = newGame(
+    [
+      { id: 'a', name: 'A' },
+      { id: 'b', name: 'B' },
+    ],
+    () => 0.5,
+  );
+  eq(two.players[0].coins, 1, 'starter has 1');
+  eq(two.players[1].coins, 2, 'opponent has 2');
+  const three = newGame(
+    [
+      { id: 'a', name: 'A' },
+      { id: 'b', name: 'B' },
+      { id: 'c', name: 'C' },
+    ],
+    () => 0.5,
+  );
+  eq(
+    three.players.map((p) => p.coins),
+    [2, 2, 2],
+    'three players all start with 2',
+  );
+});
+
+test('stealing from a broke player is legal and takes nothing', () => {
+  let s = rig({ a: ['captain', 'duke'], b: ['contessa', 'contessa'] }, ['ambassador'], {
+    a: 3,
+    b: 0,
+  });
+  s = mv(s, 'a', { type: 'declare', action: 'steal', target: 'b' });
+  eq(s.phase, 'action_challenge', 'the claim stands to be challenged');
+  s = mv(s, 'b', { type: 'pass' }); // no challenge
+  s = mv(s, 'b', { type: 'pass' }); // no block
+  eq(P(s, 'a').coins, 3, 'thief gained nothing');
+  eq(P(s, 'b').coins, 0, 'victim still has nothing');
+  eq(s.phase, 'action', 'turn ended cleanly');
 });
 
 /* ------------------------------------------------------------------ */

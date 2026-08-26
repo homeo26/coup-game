@@ -127,6 +127,8 @@ export function newGame(
       { role: deck.pop()!, revealed: false },
     ],
   }));
+  // Official two-player rule: the starting player receives only 1 coin.
+  if (players.length === 2) players[0].coins = 1;
   return {
     players,
     deck,
@@ -260,7 +262,8 @@ function declare(s: GameState, me: PlayerState, action: ActionType, target?: str
     if (!target || target === me.id) throw new Error('target required');
     tgt = player(s, target);
     if (!isAlive(tgt)) throw new Error('target eliminated');
-    if (action === 'steal' && tgt.coins === 0) throw new Error('target has no coins');
+    // (a 0-coin target is legal: the rules only cap the amount taken, and
+    // claiming Captain to bait a challenge is a real play)
   }
 
   switch (action) {

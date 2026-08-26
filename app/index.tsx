@@ -14,7 +14,7 @@ import { LobbyScreen } from '../src/screens/LobbyScreen';
 import { GameScreen } from '../src/screens/GameScreen';
 import { RulesScreen } from '../src/screens/RulesScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
-import { TabBar } from '../src/components/TabBar';
+import { TABS_IDLE, TABS_IN_ROOM, TabBar } from '../src/components/TabBar';
 import { useRoom } from '../src/net/RoomContext';
 import { useSettings } from '../src/settings';
 import * as music from '../src/music';
@@ -42,7 +42,9 @@ export default function TabsHost() {
   // Joining/creating a room snaps back to the Play tab.
   const roomCode = room?.code ?? null;
   useEffect(() => {
-    if (roomCode) pagerRef.current?.setPage(0);
+    // joining or leaving a room returns to Play (and leaving removes the
+    // chat page, so we must not be sitting on it)
+    pagerRef.current?.setPage(0);
     setChatSeen(0);
   }, [roomCode]);
 
@@ -80,21 +82,26 @@ export default function TabsHost() {
     };
   }, [musicOn]);
 
+  // The chat page only exists while in a room — otherwise it isn't in the
+  // pager at all, so it can't be reached by swiping either.
+  const tabs = room ? TABS_IN_ROOM : TABS_IDLE;
+  const chatIndex = tabs.indexOf('chat');
+
   // Unread chat: everything after the last time the chat tab was open.
   const chatLen = room?.chat.length ?? 0;
   useEffect(() => {
-    if (page === 1) setChatSeen(chatLen);
-  }, [page, chatLen]);
+    if (chatIndex >= 0 && page === chatIndex) setChatSeen(chatLen);
+  }, [page, chatLen, chatIndex]);
   const lastMsg = chatLen > 0 ? room!.chat[chatLen - 1] : null;
   const prevLen = useRef(chatLen);
   useEffect(() => {
     // ping for incoming messages while the chat tab is closed
-    if (chatLen > prevLen.current && page !== 1 && lastMsg && lastMsg.u !== myId) {
+    if (chatLen > prevLen.current && page !== chatIndex && lastMsg && lastMsg.u !== myId) {
       sound.play('chat');
     }
     prevLen.current = chatLen;
   }, [chatLen, page, lastMsg, myId]);
-  const chatBadge = page === 1 ? 0 : Math.max(0, chatLen - chatSeen);
+  const chatBadge = page === chatIndex ? 0 : Math.max(0, chatLen - chatSeen);
 
   // Android hardware back: return to the Play tab first, then exit.
   useEffect(() => {
@@ -117,23 +124,24 @@ export default function TabsHost() {
         offscreenPageLimit={3}
         onPageSelected={(e) => setPage(e.nativeEvent.position)}
       >
-        <View key="play" style={styles.page}>
-          <PlayTab />
-        </View>
-        <View key="chat" style={styles.page}>
-          <ChatScreen />
-        </View>
-        <View key="rules" style={styles.page}>
-          <RulesScreen />
-        </View>
-        <View key="settings" style={styles.page}>
-          <SettingsScreen />
-        </View>
+        {tabs.map((tab) => (
+          <View key={tab} style={styles.page}>
+            {tab === 'play' ? (
+              <PlayTab />
+            ) : tab === 'chat' ? (
+              <ChatScreen />
+            ) : tab === 'rules' ? (
+              <RulesScreen />
+            ) : (
+              <SettingsScreen />
+            )}
+          </View>
+        ))}
       </PagerView>
       <TabBar
+        tabs={tabs}
         activeIndex={page}
         onPress={(i) => pagerRef.current?.setPage(i)}
-        showChat={!!room}
         chatBadge={chatBadge}
       />
     </View>

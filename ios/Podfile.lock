@@ -45,7 +45,7 @@ PODS:
     - ExpoModulesCore
   - ExpoLinearGradient (57.0.1):
     - ExpoModulesCore
-  - ExpoLinking (57.0.6):
+  - ExpoLinking (57.0.7):
     - ExpoModulesCore
   - ExpoLocalization (57.0.1):
     - ExpoModulesCore
@@ -2732,7 +2732,7 @@ SPEC CHECKSUMS:
   ExpoHaptics: 4503d2da51ff7109712ccdfe0e4939f66818183e
   ExpoKeepAwake: c26f14275017370cc8a4b7b43a0e23361f2053a5
   ExpoLinearGradient: 903b3f5fe566c666ff78b2599add51d094483613
-  ExpoLinking: 2e8d88a5a386b47325d9500067c8e60dd4a94340
+  ExpoLinking: 2e9ead00fcb0d3e623a8d4935fadae3cdb6d4d97
   ExpoLocalization: 659243b03b3a3e9589793cee2f728a899e181329
   ExpoLogBox: 6bb73c341aca22e699bd4da6cc61afc844e1a648
   ExpoModulesCore: 7892ba246d9cb2efc55fc7b0ea13e24bd5ced74b

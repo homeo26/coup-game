@@ -1111,9 +1111,11 @@ export function GameScreen() {
               sending ||
               (cost !== undefined && me.coins < cost) ||
               (mustCoup && a !== 'coup') ||
-              // steal needs someone with coins; coup/assassinate need a live target
+              // coup / assassinate / steal all just need a living target
+              // (stealing from a broke player is legal — it can bait a
+              // challenge — the amount taken is simply capped at what they have)
               ((a === 'steal' || a === 'coup' || a === 'assassinate') &&
-                !opponents.some((o) => isAlive(o) && (a !== 'steal' || o.coins > 0)));
+                !opponents.some((o) => isAlive(o)));
             const isSel = selAction === a;
             const isBluff = !!role && !myRoles.includes(role);
             const color = role ? roleColors[role] : a === 'coup' ? theme.colors.danger : theme.colors.gold;
@@ -1415,8 +1417,7 @@ export function GameScreen() {
     !!selAction &&
     needsTarget(selAction) &&
     !selTarget &&
-    isAlive(p) &&
-    (selAction !== 'steal' || p.coins > 0);
+    isAlive(p);
 
   const winner = g.winner ? g.players.find((p) => p.id === g.winner) : null;
   const latestLog = g.log.length > 0 ? g.log[g.log.length - 1] : null;
