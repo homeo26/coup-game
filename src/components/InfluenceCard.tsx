@@ -76,57 +76,62 @@ export function InfluenceCard({ role, dead, width = 96, selected, tilt = 0 }: Pr
 
   const rc = role ? roleColors[role] : '#3a4150';
 
+  // Structure matters here. The clipping view (overflow:'hidden', which the
+  // card art needs) keeps a FIXED set of props: nothing about it changes when
+  // the card is selected or dies. Fabric drops the children of a clipped view
+  // that also carries elevation when its props are reconfigured, which is how
+  // de-selecting a card in the exchange picker made it disappear. So the
+  // shadow, the dimming and the selection ring all live on views that never
+  // clip, and selection is an overlay sibling rather than a border on the art.
   return (
-    <Animated.View
-      style={[
-        styles.card,
-        { width, height },
-        selected ? styles.selected : null,
-        dead ? styles.dead : null,
-        anim,
-      ]}
-    >
-      {faceUp && role ? (
-        <View style={styles.face}>
-          <Image source={FACE_ART[role]} style={{ width, height }} resizeMode="cover" />
-          {/* the art leaves a plate for the localized name */}
-          <View
-            style={[
-              styles.namePlate,
-              {
-                left: width * 0.11,
-                right: width * 0.11,
-                bottom: height * 0.093,
-                height: height * 0.112,
-              },
-            ]}
-          >
-            <Text
-              numberOfLines={1}
-              style={[styles.name, { color: rc, fontSize: Math.max(8, width * 0.125) }]}
+    <Animated.View style={[styles.wrap, { width, height }, dead ? styles.dead : null, anim]}>
+      <View style={[styles.card, { width, height }]}>
+        {faceUp && role ? (
+          <View style={styles.face}>
+            <Image source={FACE_ART[role]} style={{ width, height }} resizeMode="cover" />
+            {/* the art leaves a plate for the localized name */}
+            <View
+              style={[
+                styles.namePlate,
+                {
+                  left: width * 0.11,
+                  right: width * 0.11,
+                  bottom: height * 0.093,
+                  height: height * 0.112,
+                },
+              ]}
             >
-              {t(role as TKey)}
-            </Text>
+              <Text
+                numberOfLines={1}
+                style={[styles.name, { color: rc, fontSize: Math.max(8, width * 0.125) }]}
+              >
+                {t(role as TKey)}
+              </Text>
+            </View>
+            {dead ? <View style={styles.strike} /> : null}
           </View>
-          {dead ? <View style={styles.strike} /> : null}
-        </View>
-      ) : (
-        <Image
-          source={require('../../assets/cards/back.png')}
-          style={{ width, height }}
-          resizeMode="cover"
-        />
-      )}
+        ) : (
+          <Image
+            source={require('../../assets/cards/back.png')}
+            style={{ width, height }}
+            resizeMode="cover"
+          />
+        )}
+      </View>
+      {selected ? <View pointerEvents="none" style={styles.selected} /> : null}
     </Animated.View>
   );
 }
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
+    wrap: {
+      borderRadius: 10,
+      ...theme.shadow.card,
+    },
     card: {
       borderRadius: 10,
       overflow: 'hidden',
-      ...theme.shadow.card,
     },
     face: {
       flex: 1,
@@ -139,11 +144,14 @@ const makeStyles = (theme: Theme) =>
     name: {
       fontFamily: font('bold'),
     },
+    /** Selection ring: an overlay, so the clipped art view is never touched. */
     selected: {
-      // NOTE: no elevation/shadow here on purpose. This view uses
-      // overflow:'hidden' for the card art, and toggling elevation on a
-      // clipped view makes Fabric drop its contents — which showed up as
-      // a card vanishing when it was de-selected in the exchange picker.
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      borderRadius: 10,
       borderColor: theme.colors.goldLight,
       borderWidth: 3,
     },
