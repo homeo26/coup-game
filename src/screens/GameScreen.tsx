@@ -544,12 +544,7 @@ function TableSeat({
           style={[
             styles.seatNameChip,
             onSilver && styles.seatNameChipTurn,
-            claim && {
-              borderColor: roleColors[claim],
-              backgroundColor: 'rgba(6,8,12,0.96)',
-              // a claim earns a little more room than a bare name
-              maxWidth: SEAT_W + 40,
-            },
+            claim && { borderColor: roleColors[claim], backgroundColor: 'rgba(6,8,12,0.96)' },
             dead && { opacity: 0.6 },
           ]}
         >
@@ -558,25 +553,17 @@ function TableSeat({
               <RolePortrait role={claim} size={15} ring={1} />
             </Animated.View>
           ) : null}
-          {claim && dense ? null : (
-            <Text
-              style={[
-                styles.seatNameText,
-                onSilver && styles.seatNameTextTurn,
-                claim && { color: roleColors[claim] },
-                claim && styles.seatNameShrink,
-              ]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {p.name}
-            </Text>
-          )}
-          {claim ? (
-            <Text style={[styles.seatRoleText, { color: roleColors[claim] }]} numberOfLines={1}>
-              {dense ? t(claim as TKey) : `· ${t(claim as TKey)}`}
-            </Text>
-          ) : null}
+          <Text
+            style={[
+              styles.seatNameText,
+              onSilver && styles.seatNameTextTurn,
+              claim && { color: roleColors[claim] },
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {claim ? t(claim as TKey) : p.name}
+          </Text>
           {dense && !dead ? (
             <>
               <View style={[styles.chipDivider, onSilver && styles.chipDividerOnSilver]} />
@@ -2316,16 +2303,6 @@ const makeStyles = (theme: Theme) =>
       fontSize: 11,
       fontFamily: font('bold'),
       color: theme.colors.ink,
-    },
-    /** With a claim showing, the name gives way — the role must stay whole. */
-    seatNameShrink: {
-      flexShrink: 1,
-      minWidth: 0,
-    },
-    seatRoleText: {
-      fontSize: 11,
-      fontFamily: font('bold'),
-      flexShrink: 0,
     },
     seatNameChipTurn: {
       backgroundColor: theme.colors.gold,
