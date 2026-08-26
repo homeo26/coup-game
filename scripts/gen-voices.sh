@@ -43,3 +43,32 @@ process contessa   ""
 
 rm -rf "$TMP"
 echo "voice stingers regenerated (natural voices, minimal processing)"
+
+# ---------------------------------------------------------------------------
+# Reaction barks: how each character behaves when a challenge is resolved or
+# their action is blocked. Same natural voices, same light processing.
+# ---------------------------------------------------------------------------
+TMP2=$(mktemp -d)
+mkdir -p assets/sounds/roles
+
+react() { # role voice rate gloat caught blocked
+  local role=$1 voice=$2 rate=$3 gloat=$4 caught=$5 blocked=$6
+  say -v "$voice" -r "$rate" -o "$TMP2/$role-gloat.aiff"   "$gloat"
+  say -v "$voice" -r "$rate" -o "$TMP2/$role-caught.aiff"  "$caught"
+  say -v "$voice" -r "$rate" -o "$TMP2/$role-blocked.aiff" "$blocked"
+  for kind in gloat caught blocked; do
+    ffmpeg -y -loglevel error -i "$TMP2/$role-$kind.aiff" \
+      -af "$TRIM,loudnorm=I=-17:TP=-1.5" \
+      -ac 1 -ar 44100 -c:a aac -b:a 96k "assets/sounds/roles/$role-$kind.m4a"
+  done
+  echo "  $role reactions"
+}
+
+react duke       Daniel   158 "The Duke does not bluff."            "A regrettable exaggeration."   "The treasury is closed to me."
+react captain    Reed     176 "Told you. The Captain."              "Fine. You caught me."          "My hands are empty."
+react ambassador Rishi    168 "The Ambassador keeps his word."      "A misunderstanding, truly."    "The Court is closed today."
+react assassin   Tessa    152 "The blade was always real."          "No blade. Not this time."      "The Contessa saved you."
+react contessa   Samantha 172 "The Contessa is never questioned."   "I had no Contessa."            "So be it."
+
+rm -rf "$TMP2"
+echo "reaction barks regenerated"

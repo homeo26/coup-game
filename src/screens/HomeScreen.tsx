@@ -41,6 +41,7 @@ import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useSettings } from '../settings';
 import { useRoom } from '../net/RoomContext';
 import { consumePendingJoin, onPendingJoin, parseJoinCode } from '../net/deeplink';
+import { PERSONAS } from '../personas';
 import { t, TKey, isRTL } from '../i18n';
 import * as haptics from '../haptics';
 import * as sound from '../sound';
@@ -52,7 +53,10 @@ type Panel = 'join' | 'offline' | null;
 
 /** Both tile panels share one fixed-height slot, so switching never
  *  re-lays out the screen (which looked like the widget being torn). */
-const PANEL_H = 132;
+const JOIN_PANEL_H = 132;
+const ROSTER_ROW_H = 31;
+/** Offline panel: title + one row per opponent + the counter and the button. */
+const offlinePanelH = (bots: number) => 128 + bots * ROSTER_ROW_H;
 
 export function HomeScreen() {
   const theme = useTheme();
@@ -62,6 +66,7 @@ export function HomeScreen() {
   const [name, setName] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState('');
   const [botCount, setBotCount] = useState(2);
+  const scrollRef = useRef<ScrollView>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [notice, setNotice] = useState<SheetMessage | null>(null);
@@ -192,8 +197,9 @@ export function HomeScreen() {
     opacity: slide.value * shown.value,
     transform: [{ translateX: (1 - slide.value) * 26 }],
   }));
+  const boxH = useSharedValue(JOIN_PANEL_H);
   const slotStyle = useAnimatedStyle(() => ({
-    height: shown.value * PANEL_H,
+    height: shown.value * boxH.value,
     marginTop: shown.value * 14,
     opacity: shown.value,
   }));
@@ -205,6 +211,17 @@ export function HomeScreen() {
       transform: [{ translateX: indicator.value * (half + 12) }],
     };
   });
+
+  useEffect(() => {
+    if (panel === 'offline') {
+      const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 220);
+      boxH.value = withTiming(offlinePanelH(botCount), {
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+      });
+      return () => clearTimeout(t);
+    }
+  }, [botCount, panel, boxH]);
 
   const openPanel = (p: Panel) => {
     haptics.selection();
@@ -218,6 +235,10 @@ export function HomeScreen() {
         indicatorShown.value = withTiming(1, { duration: 140 });
         slide.value = withTiming(to, ease);
         shown.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) });
+        boxH.value = withTiming(
+          next === 'offline' ? offlinePanelH(botCount) : JOIN_PANEL_H,
+          ease,
+        );
       } else {
         indicatorShown.value = withTiming(0, { duration: 140 });
         shown.value = withTiming(0, { duration: 180, easing: Easing.in(Easing.quad) });
@@ -239,6 +260,7 @@ export function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -368,6 +390,27 @@ export function HomeScreen() {
               style={[styles.panelBox, { borderColor: roleColors.ambassador + '55' }, offlineStyle]}
               pointerEvents={panel === 'offline' ? 'auto' : 'none'}
             >
+              <Text style={[styles.rosterTitle, rtl && styles.rtlText]}>{t('meetTheTable')}</Text>
+              <View style={styles.roster}>
+                {PERSONAS.slice(0, botCount).map((persona) => (
+                  <Animated.View
+                    key={persona.id}
+                    entering={FadeIn.duration(220)}
+                    style={[styles.rosterRow, rtl && styles.rowReverse]}
+                  >
+                    <Avatar id={persona.avatar} size={26} ring={1.5} />
+                    <Text style={[styles.rosterName, rtl && styles.rtlText]}>
+                      {t(persona.nameKey)}
+                    </Text>
+                    <Text
+                      style={[styles.rosterLine, rtl && styles.rtlText]}
+                      numberOfLines={1}
+                    >
+                      {t(persona.dossierKey)}
+                    </Text>
+                  </Animated.View>
+                ))}
+              </View>
               <View style={[styles.botRow, rtl && styles.rowReverse]}>
                 <Text style={[styles.botLabel, rtl && styles.rtlText]}>{t('botCount')}</Text>
                 <View style={[styles.botChips, rtl && styles.rowReverse]}>
@@ -441,7 +484,7 @@ export function HomeScreen() {
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: theme.colors.background },
-    scroll: { padding: 20, paddingBottom: 28 },
+    scroll: { padding: 20, paddingBottom: 104 },
     rowReverse: { flexDirection: 'row-reverse' },
     rtlText: { textAlign: 'right', writingDirection: 'rtl' },
 
@@ -531,12 +574,12 @@ const makeStyles = (theme: Theme) =>
       left: 0,
       right: 0,
       top: 0,
-      height: PANEL_H,
+      bottom: 0,
       backgroundColor: theme.colors.surface,
       borderRadius: theme.radius.md,
       borderWidth: 1.5,
       padding: 12,
-      gap: 10,
+      gap: 8,
       justifyContent: 'center',
     },
     joinRow: { flexDirection: 'row', gap: 10 },
@@ -574,6 +617,26 @@ const makeStyles = (theme: Theme) =>
     },
     goBtnText: { fontSize: 15, fontFamily: font('bold'), color: theme.colors.goldLight },
 
+    rosterTitle: {
+      fontSize: 11.5,
+      fontFamily: font('bold'),
+      color: theme.colors.goldLight,
+      letterSpacing: 0.4,
+    },
+    roster: { gap: 3 },
+    rosterRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+    rosterName: {
+      fontSize: 12,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+      minWidth: 44,
+    },
+    rosterLine: {
+      flex: 1,
+      fontSize: 10.5,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkFaint,
+    },
     botRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     botLabel: { fontSize: 13, fontFamily: font('semibold'), color: theme.colors.inkSoft },
     botChips: { flexDirection: 'row', gap: 6 },

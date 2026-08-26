@@ -12,6 +12,8 @@ export interface Settings {
   haptics: boolean;
   sounds: boolean;
   music: boolean;
+  /** Show a subtle sign when an offline bot is bluffing. */
+  tells: boolean;
   /** Character portrait used as the player's avatar. */
   avatar: string;
   playerName: string;
@@ -24,6 +26,7 @@ const DEFAULTS: Settings = {
   haptics: true,
   sounds: true,
   music: true,
+  tells: false,
   avatar: ANIMALS[Math.floor(Math.random() * ANIMALS.length)],
   playerName: '',
 };

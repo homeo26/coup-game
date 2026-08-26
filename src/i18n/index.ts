@@ -54,6 +54,34 @@ export const dict = {
   playVsBots: { en: 'Play vs bots', ar: 'العب ضد الروبوتات' },
   botName: { en: 'Bot {n}', ar: 'روبوت {n}' },
 
+  // Offline cast — names and dossiers (Arabic gets regional names)
+  personaHoarderName: { en: 'Rami', ar: 'رامي' },
+  personaHoarderLine: {
+    en: 'Sits on his coins, then coups the leader without warning.',
+    ar: 'يكنز عملاته، ثم ينفّذ انقلاباً على المتصدّر بلا سابق إنذار.',
+  },
+  personaRecklessName: { en: 'Layla', ar: 'ليلى' },
+  personaRecklessLine: {
+    en: 'Claims whatever suits her — bluffs on a coin flip.',
+    ar: 'تدّعي ما يناسبها — تخادع بحساب الحظ.',
+  },
+  personaSuspiciousName: { en: 'Nabil', ar: 'نبيل' },
+  personaSuspiciousLine: {
+    en: 'Trusts nobody; challenges far more than is wise.',
+    ar: 'لا يثق بأحد؛ يتحدّى أكثر مما ينبغي.',
+  },
+  personaGrudgeName: { en: 'Hind', ar: 'هند' },
+  personaGrudgeLine: {
+    en: 'Forgets nothing — whoever hits her gets it back twice.',
+    ar: 'لا تنسى شيئاً — من يضربها يردّ له الضربة مضاعفة.',
+  },
+  personaQuietName: { en: 'Sami', ar: 'سامي' },
+  personaQuietLine: {
+    en: 'Plays quietly, counts every card, strikes when it is safe.',
+    ar: 'يلعب بهدوء، يعدّ كل بطاقة، ويضرب حين يأمن.',
+  },
+  meetTheTable: { en: 'Your opponents', ar: 'خصومك' },
+
   // Lobby
   lobby: { en: 'Lobby', ar: 'صالة الانتظار' },
   shareCode: { en: 'Share this code with your friends', ar: 'شارك هذا الرمز مع أصدقائك' },
@@ -292,6 +320,12 @@ export const dict = {
   hapticsSetting: { en: 'Haptic feedback', ar: 'الاهتزاز عند اللمس' },
   hapticsDesc: { en: 'Tactile feedback on taps', ar: 'ردة فعل لمسية عند الضغط' },
   audioSection: { en: 'Audio', ar: 'الصوت' },
+  playSection: { en: 'Play', ar: 'اللعب' },
+  tellsSetting: { en: 'Bot tells', ar: 'أمارات الروبوتات' },
+  tellsDesc: {
+    en: 'A bluffing bot gives a subtle sign (offline games only)',
+    ar: 'الروبوت المخادع يُبدي إشارة خفيفة (في اللعب دون اتصال فقط)',
+  },
   soundsSetting: { en: 'Sound effects', ar: 'المؤثرات الصوتية' },
   soundsDesc: { en: 'Cards, coins and table sounds', ar: 'أصوات البطاقات والعملات والطاولة' },
   soundsDesc2: {

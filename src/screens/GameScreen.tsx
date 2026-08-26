@@ -50,7 +50,7 @@ import { Avatar } from '../components/Avatar';
 import { Breathing } from '../components/Breathing';
 import { MessageSheet, SheetMessage } from '../components/MessageSheet';
 import { useRoom } from '../net/RoomContext';
-import { useSettings } from '../settings';
+import { getSettings, useSettings } from '../settings';
 import { influence, isAlive, pendingResponders, standings } from '../engine/engine';
 import {
   ACTION_ROLE,
@@ -154,6 +154,30 @@ const BANNER_ALWAYS = new Set([
   'logTimeout',
   'logWinner',
 ]);
+
+/**
+ * The bark a character gives once a claim resolves: gloating when it was
+ * proven, owning up when the bluff is caught, grumbling when blocked.
+ */
+function reactionFor(entry: LogEntry, g: GameState): sound.SoundKey | null {
+  const role = entry.params?.r as Role | undefined;
+  switch (entry.key) {
+    case 'logChallengeFailed': // the claim was proven
+      return role ? (sound.ROLE_REACTION[role]?.gloat ?? null) : null;
+    case 'logChallengeWon': // the bluff was caught
+      return g.pending?.claimedRole
+        ? (sound.ROLE_REACTION[g.pending.claimedRole]?.caught ?? null)
+        : null;
+    case 'logAssassinateBlocked':
+      return sound.ROLE_REACTION.assassin.blocked;
+    case 'logStealBlocked':
+      return sound.ROLE_REACTION.captain.blocked;
+    case 'logForeignAidBlocked':
+      return sound.ROLE_REACTION.duke.gloat; // the blocking Duke had the last word
+    default:
+      return null;
+  }
+}
 
 /** Which cue a game event plays (null = silent). */
 function logSound(key: string, role?: string): sound.SoundKey | null {
@@ -312,6 +336,7 @@ function TableSeat({
   claim,
   passed,
   dense,
+  tell,
 }: {
   p: PlayerState;
   avatar?: string;
@@ -333,6 +358,8 @@ function TableSeat({
   passed?: boolean;
   /** Crowded table: shrink, swap the card fan for pips, fold coins in. */
   dense?: boolean;
+  /** Rising counter: this player just bluffed and the tell should show. */
+  tell?: number;
 }) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
@@ -352,6 +379,24 @@ function TableSeat({
         ? 34
         : 44;
   const COIN = dense ? 13 : compact ? 14 : 18; // coin glyph size
+
+  // The tell: a small, quick shiver — noticeable if you are watching for it
+  const shiver = useSharedValue(0);
+  const lastTell = useRef(tell ?? 0);
+  useEffect(() => {
+    if (tell && tell !== lastTell.current) {
+      lastTell.current = tell;
+      shiver.value = withSequence(
+        withTiming(-1.4, { duration: 70 }),
+        withTiming(1.4, { duration: 90 }),
+        withTiming(-0.8, { duration: 80 }),
+        withTiming(0, { duration: 90 }),
+      );
+    }
+  }, [tell, shiver]);
+  const shiverStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${shiver.value}deg` }],
+  }));
 
   // A gentle scale nudge when the turn arrives at this seat
   const nudge = useSharedValue(1);
@@ -388,8 +433,9 @@ function TableSeat({
   const nudgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: nudge.value }] }));
 
   return (
-    <View
+    <Animated.View
       style={[
+        shiverStyle,
         styles.tableSeat,
         anchorBottom !== undefined
           ? {
@@ -538,7 +584,7 @@ function TableSeat({
           <Text style={styles.emoteBubbleText}>{emote}</Text>
         </Animated.View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -743,7 +789,7 @@ export function GameScreen() {
   const styles = useStyles(makeStyles);
   const { width, height: winH } = useWindowDimensions();
   const { lang } = useSettings();
-  const { room, myId, move, leave, again } = useRoom();
+  const { room, myId, move, leave, again, isLocal } = useRoom();
   const [selAction, setSelAction] = useState<ActionType | null>(null);
   const [selTarget, setSelTarget] = useState<string | null>(null);
   const [loseIdx, setLoseIdx] = useState<number | null>(null);
@@ -761,6 +807,7 @@ export function GameScreen() {
   const [deals, setDeals] = useState<
     { key: string; to: { x: number; y: number }; delay: number }[]
   >([]);
+  const [tells, setTells] = useState<Record<string, number>>({});
   const [attack, setAttack] = useState<{
     key: number;
     kind: 'steal' | 'assassinate' | 'coup';
@@ -927,6 +974,9 @@ export function GameScreen() {
       } else {
         const cue = logSound(entry.key, entry.params?.r as string | undefined);
         if (cue) sound.play(cue);
+        // …then the character's own reaction, a beat later
+        const reaction = reactionFor(entry, g);
+        if (reaction) setTimeout(() => sound.play(reaction), 620);
       }
       // directional attack visuals
       if (tableBox.w > 0 && entry.params?.a) {
@@ -955,6 +1005,23 @@ export function GameScreen() {
               withTiming(-5, { duration: 50 }),
               withTiming(0, { duration: 70 }),
             );
+          }
+        }
+      }
+      // a bluffing bot gives a tell (offline only, and only when asked for)
+      if (
+        entry.key === 'logDeclared' &&
+        isLocal &&
+        getSettings().tells &&
+        entry.params?.a &&
+        entry.params?.r
+      ) {
+        const claimer = g.players.find((pl) => pl.name === entry.params!.a);
+        const role = entry.params.r as Role;
+        if (claimer && claimer.id !== myId) {
+          const holds = claimer.cards.some((c) => !c.revealed && c.role === role);
+          if (!holds) {
+            setTells((cur) => ({ ...cur, [claimer.id]: (cur[claimer.id] ?? 0) + 1 }));
           }
         }
       }
@@ -1573,6 +1640,7 @@ export function GameScreen() {
             claim={claimOf(p.id)}
             passed={hasPassed(p.id)}
             dense={dense}
+            tell={tells[p.id]}
             onTarget={() => {
               if (!targetable(p)) return;
               haptics.selection();

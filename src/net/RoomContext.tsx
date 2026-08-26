@@ -77,8 +77,7 @@ const RoomContext = createContext<RoomState>({
 
 /** Emoji palette bots draw from when they feel chatty. */
 const BOT_EMOTES = ['😏', '😂', '🤔', '😱', '🔥', '💀', '👑'];
-/** Distinct animal avatars handed to offline bots by seat. */
-const ROLES_FOR_BOTS = ['monkey', 'penguin', 'frog', 'elephant', 'owl'];
+import { PERSONAS, personaFor } from '../personas';
 
 export function RoomProvider({ children }: { children: React.ReactNode }) {
   const [myId, setMyId] = useState<string | null>(null);
@@ -157,7 +156,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
                 [...c, {
                   u: botId,
                   n: bot.name,
-                  a: (botId.match(/bot-(\d)/) && ROLES_FOR_BOTS[(parseInt(botId.split('-')[1], 10) - 1) % 5]) || undefined,
+                  a: personaFor(botId)?.avatar,
                   k: 'emote' as const,
                   v: emote,
                   ts: Date.now(),
@@ -180,10 +179,10 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       const n = Math.max(1, Math.min(5, bots));
       const roster = [
         { id: myId, name, avatar: getSettings().avatar },
-        ...Array.from({ length: n }, (_, i) => ({
-          id: `bot-${i + 1}`,
-          name: t('botName', { n: i + 1 }),
-          avatar: ROLES_FOR_BOTS[i % 5],
+        ...PERSONAS.slice(0, n).map((persona) => ({
+          id: persona.id,
+          name: t(persona.nameKey),
+          avatar: persona.avatar,
         })),
       ];
       detach();
@@ -287,7 +286,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         roster: localGame.players.map((p) => ({
           id: p.id,
           name: p.name,
-          avatar: p.id === myId ? getSettings().avatar : ROLES_FOR_BOTS[(parseInt(p.id.split('-')[1] ?? '1', 10) - 1) % 5],
+          avatar: p.id === myId ? getSettings().avatar : personaFor(p.id)?.avatar,
         })),
         chat: localChat,
         timerSec: 0,

@@ -120,6 +120,25 @@ export function SettingsScreen() {
           </View>
         </View>
 
+        {/* Bot tells */}
+        <Text style={[styles.sectionLabel, rtlText]}>{t('playSection')}</Text>
+        <View style={styles.card}>
+          <View style={[styles.row, rtl && styles.rowReverse]}>
+            <Ionicons name="eye-outline" size={20} color={theme.colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowTitle, rtlText]}>{t('tellsSetting')}</Text>
+              <Text style={[styles.rowDesc, rtlText]}>{t('tellsDesc')}</Text>
+            </View>
+            <Pressy
+              scaleTo={0.9}
+              onPress={() => settings.set('tells', !settings.tells)}
+              style={[styles.toggle, settings.tells && styles.toggleOn]}
+            >
+              <View style={[styles.thumb, settings.tells && styles.thumbOn]} />
+            </Pressy>
+          </View>
+        </View>
+
         {/* About */}
         <View style={styles.card}>
           <View style={[styles.row, rtl && styles.rowReverse]}>

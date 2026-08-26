@@ -41,6 +41,22 @@ const SOURCES = {
   voiceCaptain: require('../assets/sounds/roles/captain.m4a'),
   voiceAmbassador: require('../assets/sounds/roles/ambassador.m4a'),
   voiceContessa: require('../assets/sounds/roles/contessa.m4a'),
+  // reaction barks: how a character takes a resolved challenge or a block
+  voiceDukeGloat: require('../assets/sounds/roles/duke-gloat.m4a'),
+  voiceDukeCaught: require('../assets/sounds/roles/duke-caught.m4a'),
+  voiceDukeBlocked: require('../assets/sounds/roles/duke-blocked.m4a'),
+  voiceAssassinGloat: require('../assets/sounds/roles/assassin-gloat.m4a'),
+  voiceAssassinCaught: require('../assets/sounds/roles/assassin-caught.m4a'),
+  voiceAssassinBlocked: require('../assets/sounds/roles/assassin-blocked.m4a'),
+  voiceCaptainGloat: require('../assets/sounds/roles/captain-gloat.m4a'),
+  voiceCaptainCaught: require('../assets/sounds/roles/captain-caught.m4a'),
+  voiceCaptainBlocked: require('../assets/sounds/roles/captain-blocked.m4a'),
+  voiceAmbassadorGloat: require('../assets/sounds/roles/ambassador-gloat.m4a'),
+  voiceAmbassadorCaught: require('../assets/sounds/roles/ambassador-caught.m4a'),
+  voiceAmbassadorBlocked: require('../assets/sounds/roles/ambassador-blocked.m4a'),
+  voiceContessaGloat: require('../assets/sounds/roles/contessa-gloat.m4a'),
+  voiceContessaCaught: require('../assets/sounds/roles/contessa-caught.m4a'),
+  voiceContessaBlocked: require('../assets/sounds/roles/contessa-blocked.m4a'),
 } as const;
 
 /** Voice stinger for a claimed character, if we have one. */
@@ -50,6 +66,31 @@ export const ROLE_VOICE: Record<string, SoundKey> = {
   captain: 'voiceCaptain',
   ambassador: 'voiceAmbassador',
   contessa: 'voiceContessa',
+};
+
+/** Reaction barks per character: proven claim, caught bluff, blocked action. */
+export const ROLE_REACTION: Record<string, Record<'gloat' | 'caught' | 'blocked', SoundKey>> = {
+  duke: { gloat: 'voiceDukeGloat', caught: 'voiceDukeCaught', blocked: 'voiceDukeBlocked' },
+  assassin: {
+    gloat: 'voiceAssassinGloat',
+    caught: 'voiceAssassinCaught',
+    blocked: 'voiceAssassinBlocked',
+  },
+  captain: {
+    gloat: 'voiceCaptainGloat',
+    caught: 'voiceCaptainCaught',
+    blocked: 'voiceCaptainBlocked',
+  },
+  ambassador: {
+    gloat: 'voiceAmbassadorGloat',
+    caught: 'voiceAmbassadorCaught',
+    blocked: 'voiceAmbassadorBlocked',
+  },
+  contessa: {
+    gloat: 'voiceContessaGloat',
+    caught: 'voiceContessaCaught',
+    blocked: 'voiceContessaBlocked',
+  },
 };
 
 export type SoundKey = keyof typeof SOURCES;
