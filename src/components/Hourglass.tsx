@@ -8,6 +8,7 @@ import React, { useEffect } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, {
   Easing,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -22,14 +23,22 @@ export function Hourglass({
   outline,
   /** Milliseconds the glass rests between tips. */
   hold = 1500,
+  /** The sand has run out: hold still. */
+  spent,
 }: {
   size?: number;
   color: string;
   outline?: boolean;
   hold?: number;
+  spent?: boolean;
 }) {
   const turn = useSharedValue(0);
   useEffect(() => {
+    if (spent) {
+      cancelAnimation(turn);
+      turn.value = 0;
+      return;
+    }
     // The icon is symmetric top-to-bottom, so snapping back to 0 at the end
     // of each loop is invisible — only the tip itself is seen.
     turn.value = 0;
@@ -44,7 +53,8 @@ export function Hourglass({
       -1,
       false,
     );
-  }, [turn, hold]);
+    return () => cancelAnimation(turn);
+  }, [turn, hold, spent]);
   const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value * 180}deg` }] }));
 
   return (

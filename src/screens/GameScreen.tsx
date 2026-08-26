@@ -17,6 +17,8 @@ import {
   Text,
   View,
   useWindowDimensions,
+  StyleProp,
+  ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -36,6 +38,7 @@ import Animated, {
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
+  type SharedValue,
   withDelay,
   withRepeat,
   withSequence,
@@ -311,6 +314,9 @@ const SEAT_ANCHORS: Record<number, { x: number; y: number }[]> = {
 };
 
 const SEAT_W = 104;
+/** Deal timing: one card every DEAL_STEP ms, each in the air for DEAL_FLIGHT. */
+const DEAL_STEP = 150;
+const DEAL_FLIGHT = 420;
 
 /** Ability reminder shown when a player peeks at their own card. */
 const ROLE_BLURB: Record<Role, TKey> = {
@@ -339,7 +345,7 @@ function TableSeat({
   passed,
   dense,
   tell,
-  dealt,
+  dealAt,
 }: {
   p: PlayerState;
   avatar?: string;
@@ -363,8 +369,8 @@ function TableSeat({
   dense?: boolean;
   /** Rising counter: this player just bluffed and the tell should show. */
   tell?: number;
-  /** Mid-deal: render only this many cards (undefined = the whole hand). */
-  dealt?: number;
+  /** Mid-deal: ms after which each card lands, or null while a deal is pending. */
+  dealAt?: number[] | null;
 }) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
@@ -469,11 +475,11 @@ function TableSeat({
             shows as a real face-up card at card proportions. On a crowded
             table the fan is replaced by pips under the name. */}
         <View style={[styles.fan, dense && !showFaces && styles.fanTight]} pointerEvents="none">
-          {(dealt === undefined ? p.cards : p.cards.slice(0, dealt)).map((c, i) =>
+          {p.cards.map((c, i) =>
             c.revealed || showFaces ? (
-              <Animated.View
+              <DealtIn
                 key={i}
-                entering={FlipInEasyY.duration(500)}
+                at={dealAt === null ? null : dealAt?.[i]}
                 style={{
                   transform: [
                     { rotate: `${i === 0 ? -15 : 15}deg` },
@@ -481,11 +487,14 @@ function TableSeat({
                   ],
                 }}
               >
-                <InfluenceCard role={c.role} dead={c.revealed} width={CARD} />
-              </Animated.View>
+                <Animated.View entering={dealAt !== undefined ? undefined : FlipInEasyY.duration(500)}>
+                  <InfluenceCard role={c.role} dead={c.revealed} width={CARD} />
+                </Animated.View>
+              </DealtIn>
             ) : (
-              <View
+              <DealtIn
                 key={i}
+                at={dealAt === null ? null : dealAt?.[i]}
                 style={[
                   styles.fanCard,
                   dense && styles.fanCardDense,
@@ -502,7 +511,7 @@ function TableSeat({
                   style={dense ? { width: 17, height: 24 } : { width: 21, height: 30 }}
                   resizeMode="cover"
                 />
-              </View>
+              </DealtIn>
             ),
           )}
         </View>
@@ -510,6 +519,14 @@ function TableSeat({
           <View style={dead ? styles.seatDeadAvatar : undefined}>
             <Avatar id={avatar} size={AV} ring={2.5} />
           </View>
+          {dead ? (
+            <View
+              pointerEvents="none"
+              style={[styles.deadVeil, { width: AV, height: AV, borderRadius: AV / 2 }]}
+            >
+              <Ionicons name="skull" size={Math.round(AV * 0.46)} color={theme.colors.inkFaint} />
+            </View>
+          ) : null}
           {/* pulsing turn ring */}
           <Animated.View
             pointerEvents="none"
@@ -529,11 +546,7 @@ function TableSeat({
               <Ionicons name="locate" size={15} color="#fff" />
             </View>
           ) : null}
-          {dead ? (
-            <View style={styles.deadBadge}>
-              <Ionicons name="skull" size={13} color={theme.colors.inkFaint} />
-            </View>
-          ) : responding ? (
+          {dead ? null : responding ? (
             <View style={styles.respondBadge}>
               <Hourglass size={10} color={theme.colors.inkOnGold} />
             </View>
@@ -578,11 +591,7 @@ function TableSeat({
             </>
           ) : null}
         </Animated.View>
-        {dead ? (
-          <Text style={styles.deadLabel}>{t('eliminated')}</Text>
-        ) : dense ? null : (
-          <AnimatedCoins amount={p.coins} size={COIN} chip />
-        )}
+        {dead || dense ? null : <AnimatedCoins amount={p.coins} size={COIN} chip />}
       </Pressy>
       {emote ? (
         <Animated.View
@@ -597,6 +606,34 @@ function TableSeat({
       ) : null}
     </Animated.View>
   );
+}
+
+/**
+ * DealtIn — holds a card invisible until the deal's clock reaches its landing
+ * time, then fades it in over 150ms. `clock` is milliseconds since the deal
+ * started, or -1 when no deal is running (in which case the card just shows).
+ */
+function DealtIn({
+  at,
+  style,
+  children,
+}: {
+  /** ms until this card shows; undefined = at once, null = a deal is coming. */
+  at?: number | null;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const shown = useSharedValue(at === undefined ? 1 : 0);
+  useEffect(() => {
+    if (at === undefined) {
+      shown.value = 1;
+      return;
+    }
+    shown.value = 0;
+    if (at !== null) shown.value = withDelay(at, withTiming(1, { duration: 110 }));
+  }, [at, shown]);
+  const st = useAnimatedStyle(() => ({ opacity: shown.value }));
+  return <Animated.View style={[style, st]}>{children}</Animated.View>;
 }
 
 /**
@@ -697,9 +734,9 @@ function FlyingCard({
   const st = useAnimatedStyle(() => ({
     left: from.x + (to.x - from.x) * t.value,
     top: from.y + (to.y - from.y) * t.value - Math.sin(t.value * Math.PI) * arc,
-    // a dealt card holds its shape until the very end, where the seat's fan
-    // takes over — so it looks like the same card settling into the hand
-    opacity: t.value === 0 ? 0 : 1 - Math.max(0, t.value - 0.92) * 12.5,
+    // solid all the way, gone on arrival: the hand's own card takes over in
+    // the same spot, so the two never overlap as ghosts
+    opacity: t.value === 0 || t.value >= 0.995 ? 0 : 1,
     transform: [
       { rotate: `${t.value * spin}deg` },
       { scale: 1 - (toss ? 0.3 : 0.42) * t.value },
@@ -853,8 +890,11 @@ export function GameScreen() {
   const denseRef = useRef(false);
   const [peek, setPeek] = useState<Role | null>(null);
   const [fly, setFly] = useState<{ key: number; from: { x: number; y: number } } | null>(null);
-  /** While dealing: how many cards each seat has received so far. */
-  const [dealt, setDealt] = useState<Record<string, number> | null>(null);
+  /**
+   * Deal state: null = no deal, 'pending' = one is about to start (hands stay
+   * hidden), or the per-seat landing times once it runs.
+   */
+  const [dealAt, setDealAt] = useState<Record<string, number[]> | 'pending' | null>(null);
   const [deals, setDeals] = useState<
     { key: string; to: { x: number; y: number }; delay: number }[]
   >([]);
@@ -1006,9 +1046,44 @@ export function GameScreen() {
   // A fresh game opens with a shuffle and a deal: two cards sail from
   // the Court to every seat around the table.
   const dealtFor = useRef<number>(-1);
+  const boxRef = useRef(tableBox);
+  boxRef.current = tableBox;
+  const dealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (g && g.version === 0 && dealtFor.current !== 0 && g.phase !== 'game_over' && tableBox.w > 0) {
-      dealtFor.current = 0;
+    if (
+      g &&
+      g.version === 0 &&
+      dealtFor.current !== 0 &&
+      g.phase !== 'game_over' &&
+      tableBox.w > 0 &&
+      !dealTimer.current
+    ) {
+      // the sheet's slide-in is 320ms; deal once the table has stopped moving
+      dealTimer.current = setTimeout(() => {
+        dealTimer.current = null;
+        const box = boxRef.current;
+        if (box.w === 0) {
+          dealtFor.current = 0; // never measured: skip the deal, show the hands
+          setDealAt(null);
+          return;
+        }
+        dealtFor.current = 0;
+        startDeal(box);
+      }, 420);
+    }
+    if (g && g.version > 0) dealtFor.current = g.version;
+  }, [g, myId, tableBox]);
+
+  useEffect(
+    () => () => {
+      if (dealTimer.current) clearTimeout(dealTimer.current);
+    },
+    [],
+  );
+
+  const startDeal = (tableBox: { w: number; h: number }) => {
+    if (!g) return;
+    {
       sound.play('shuffle');
       const opp = g.players.filter((pl) => pl.id !== myId);
       const seats: { x: number; y: number }[] = opp.map(
@@ -1020,32 +1095,28 @@ export function GameScreen() {
       ];
       // seat order for the deal: opponents first, me last (targets[] order)
       const order = [...opp.map((pl) => pl.id), myId!];
-      const STEP = 150;
-      const FLIGHT = 430;
+      const STEP = DEAL_STEP;
+      const FLIGHT = DEAL_FLIGHT;
       const round: { key: string; to: { x: number; y: number }; delay: number }[] = [];
+      const schedule: Record<string, number[]> = Object.fromEntries(order.map((id) => [id, []]));
       for (let pass = 0; pass < 2; pass++) {
         targets.forEach((to, i) => {
-          round.push({ key: `d${pass}-${i}`, to, delay: (pass * targets.length + i) * STEP });
+          const delay = (pass * targets.length + i) * STEP;
+          round.push({ key: `d${pass}-${i}`, to, delay });
+          // the card appears in the hand exactly as its flight ends
+          schedule[order[i]].push(delay + FLIGHT - 110);
+          setTimeout(() => sound.play('card'), delay);
         });
       }
-      // hands start empty and fill card by card as each flight lands
-      setDealt(Object.fromEntries(order.map((id) => [id, 0])));
+      const total = round.length * STEP + FLIGHT + 150;
+      setDealAt(schedule);
       setDeals(round);
-      round.forEach((d, i) => {
-        const id = order[i % order.length];
-        setTimeout(() => sound.play('card'), d.delay);
-        setTimeout(() => {
-          setDealt((cur) => (cur ? { ...cur, [id]: (cur[id] ?? 0) + 1 } : cur));
-        }, d.delay + FLIGHT - 40);
-      });
-      const total = round.length * STEP + FLIGHT + 120;
       setTimeout(() => {
         setDeals([]);
-        setDealt(null); // hands are whole again; normal rendering resumes
+        setDealAt(null); // back to normal rendering; nothing re-animates
       }, total);
     }
-    if (g && g.version > 0) dealtFor.current = g.version;
-  }, [g, myId, tableBox]);
+  };
 
   // Every new game event floats an animated banner over the table, so
   // mid-game actions are impossible to miss.
@@ -1142,6 +1213,13 @@ export function GameScreen() {
   }, [logLen, g]);
 
   if (!g || !me) return null;
+  /** A fresh game whose deal has not run yet: keep every hand hidden. */
+  const dealDue = g.version === 0 && g.phase !== 'game_over' && dealtFor.current !== 0;
+  const deal: Record<string, number[]> | 'pending' | null =
+    dealAt !== null ? dealAt : dealDue ? 'pending' : null;
+  const dealing = deal !== null;
+  const seatDealAt = (id: string): number[] | null | undefined =>
+    deal === null ? undefined : deal === 'pending' ? null : deal[id];
   const rtl = isRTL();
   const opponents = g.players.filter((p) => p.id !== me.id);
   /** Crowded table (5-6 players): thin everything out. */
@@ -1784,6 +1862,7 @@ export function GameScreen() {
               color={secsLeft <= 5 ? theme.colors.danger : theme.colors.inkSoft}
               outline
               hold={secsLeft <= 5 ? 700 : 1500}
+              spent={secsLeft === 0}
             />
             <View style={styles.clockDigits}>
               <Text style={[styles.clockText, secsLeft <= 5 && { color: theme.colors.danger }]}>
@@ -1889,7 +1968,7 @@ export function GameScreen() {
         {opponents.map((p, i) => (
           <Animated.View
             key={`in-${p.id}`}
-            entering={ZoomIn.duration(360).delay(120 + i * 90)}
+            entering={dealing ? FadeIn.duration(200) : ZoomIn.duration(360).delay(120 + i * 90)}
             style={StyleSheet.absoluteFill}
             pointerEvents="box-none"
           >
@@ -1907,7 +1986,7 @@ export function GameScreen() {
             passed={hasPassed(p.id)}
             dense={dense}
             tell={tells[p.id]}
-            dealt={dealt ? dealt[p.id] ?? 0 : undefined}
+            dealAt={seatDealAt(p.id)}
             onTarget={() => {
               if (!targetable(p)) return;
               haptics.selection();
@@ -1922,7 +2001,7 @@ export function GameScreen() {
             from={{ x: tableBox.w * 0.5 - 17, y: tableBox.h * 0.36 }}
             to={d.to}
             delay={d.delay}
-            duration={430}
+            duration={DEAL_FLIGHT}
           />
         ))}
         {/* event banner: last child + high zIndex, so it always floats
@@ -1980,7 +2059,7 @@ export function GameScreen() {
           claim={claimOf(me.id)}
           passed={hasPassed(me.id)}
           dense={dense}
-          dealt={dealt ? dealt[me.id] ?? 0 : undefined}
+          dealAt={seatDealAt(me.id)}
           showFaces
         />
       </Animated.View>
@@ -2005,7 +2084,7 @@ export function GameScreen() {
           <AnimatedCoins amount={me.coins} size={20} chip />
         </View>
         <View style={styles.hand}>
-          {(dealt ? me.cards.slice(0, dealt[me.id] ?? 0) : me.cards).map((c, i) => (
+          {me.cards.map((c, i) => (
             <Pressy
               key={i}
               scaleTo={0.95}
@@ -2021,15 +2100,17 @@ export function GameScreen() {
                 }
               }}
             >
-              <Animated.View entering={FlipInEasyY.duration(420)}>
-                <InfluenceCard
-                  role={c.role}
-                  dead={c.revealed}
-                  width={92}
-                  selected={iLose && loseIdx === i}
-                  tilt={i === 0 ? -3 : 3}
-                />
-              </Animated.View>
+              <DealtIn at={seatDealAt(me.id) === null ? null : seatDealAt(me.id)?.[i]}>
+                <Animated.View entering={dealing ? undefined : FlipInEasyY.duration(420)}>
+                  <InfluenceCard
+                    role={c.role}
+                    dead={c.revealed}
+                    width={92}
+                    selected={iLose && loseIdx === i}
+                    tilt={i === 0 ? -3 : 3}
+                  />
+                </Animated.View>
+              </DealtIn>
             </Pressy>
           ))}
         </View>
@@ -2477,20 +2558,17 @@ const makeStyles = (theme: Theme) =>
       justifyContent: 'center',
     },
     seatDeadAvatar: {
-      opacity: 0.8,
+      opacity: 0.5,
     },
-    deadBadge: {
+    deadVeil: {
       position: 'absolute',
-      bottom: -2,
-      right: -2,
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      backgroundColor: theme.colors.surfaceElevated,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      top: 0,
+      left: 0,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: 'rgba(8,10,14,0.42)',
+      borderWidth: 1.5,
+      borderColor: 'rgba(233,235,240,0.18)',
     },
     respondBadge: {
       position: 'absolute',
@@ -2583,11 +2661,6 @@ const makeStyles = (theme: Theme) =>
     },
     seatNameTextTurn: {
       color: theme.colors.inkOnGold,
-    },
-    deadLabel: {
-      fontSize: 9,
-      fontFamily: font('bold'),
-      color: theme.colors.danger,
     },
     logStripInner: {
       flex: 1,
