@@ -26,6 +26,7 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeOut,
+  FadeOutUp,
   FlipInEasyY,
   LinearTransition,
   SlideInDown,
@@ -338,6 +339,7 @@ function TableSeat({
   passed,
   dense,
   tell,
+  dealt,
 }: {
   p: PlayerState;
   avatar?: string;
@@ -361,6 +363,8 @@ function TableSeat({
   dense?: boolean;
   /** Rising counter: this player just bluffed and the tell should show. */
   tell?: number;
+  /** Mid-deal: render only this many cards (undefined = the whole hand). */
+  dealt?: number;
 }) {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
@@ -465,7 +469,7 @@ function TableSeat({
             shows as a real face-up card at card proportions. On a crowded
             table the fan is replaced by pips under the name. */}
         <View style={[styles.fan, dense && !showFaces && styles.fanTight]} pointerEvents="none">
-          {p.cards.map((c, i) =>
+          {(dealt === undefined ? p.cards : p.cards.slice(0, dealt)).map((c, i) =>
             c.revealed || showFaces ? (
               <Animated.View
                 key={i}
@@ -674,22 +678,32 @@ function FlyingCard({
   to,
   delay = 0,
   duration = 520,
+  toss,
 }: {
   from: { x: number; y: number };
   to: { x: number; y: number };
   delay?: number;
   duration?: number;
+  /** Tumble end over end (a card thrown to the discard pile) instead of gliding. */
+  toss?: boolean;
 }) {
   const styles = useStyles(makeStyles);
   const t = useSharedValue(0);
   useEffect(() => {
     t.value = withDelay(delay, withTiming(1, { duration, easing: Easing.inOut(Easing.cubic) }));
   }, [t, delay, duration]);
+  const arc = toss ? 40 : 22;
+  const spin = toss ? 200 : 16;
   const st = useAnimatedStyle(() => ({
     left: from.x + (to.x - from.x) * t.value,
-    top: from.y + (to.y - from.y) * t.value - Math.sin(t.value * Math.PI) * 40,
-    opacity: t.value === 0 ? 0 : 1 - Math.max(0, t.value - 0.8) * 5,
-    transform: [{ rotate: `${t.value * 200}deg` }, { scale: 1 - 0.3 * t.value }],
+    top: from.y + (to.y - from.y) * t.value - Math.sin(t.value * Math.PI) * arc,
+    // a dealt card holds its shape until the very end, where the seat's fan
+    // takes over — so it looks like the same card settling into the hand
+    opacity: t.value === 0 ? 0 : 1 - Math.max(0, t.value - 0.92) * 12.5,
+    transform: [
+      { rotate: `${t.value * spin}deg` },
+      { scale: 1 - (toss ? 0.3 : 0.42) * t.value },
+    ],
   }));
   return (
     <Animated.View pointerEvents="none" style={[styles.flyingCard, st]}>
@@ -710,7 +724,9 @@ function DiscardPiles({ g, onPress }: { g: GameState; onPress?: () => void }) {
   const styles = useStyles(makeStyles);
   const CARD_W = 34;
   const CARD_H = Math.round(CARD_W * 1.42);
-  const STEP = 13;
+  /** Cascade per extra copy: enough of each card shows to be counted at a glance. */
+  const STEP = 11;
+  const FAN_X = 7;
   const piles = ROLES.map((r) => ({
     role: r,
     n: g.players.reduce(
@@ -722,24 +738,29 @@ function DiscardPiles({ g, onPress }: { g: GameState; onPress?: () => void }) {
   return (
     <Pressy scaleTo={0.95} onPress={onPress} style={styles.pilesRow}>
       {piles.map(({ role, n }) => {
-        // never cascade more than two cards — deep piles carry a count
-        const shown = Math.min(n, 2);
+        const shown = Math.min(n, 3); // three copies exist of each character
         return (
-          <View key={role} style={{ width: CARD_W, height: CARD_H + (shown - 1) * STEP }}>
+          <View
+            key={role}
+            style={{
+              width: CARD_W + (shown - 1) * FAN_X + 6,
+              height: CARD_H + (shown - 1) * STEP + 4,
+            }}
+          >
             {Array.from({ length: shown }).map((_, i) => (
               <Animated.View
                 key={i}
-                entering={FlipInEasyY.duration(450)}
-                style={{ position: 'absolute', top: i * STEP }}
+                entering={FlipInEasyY.duration(450).delay(i * 60)}
+                style={{
+                  position: 'absolute',
+                  top: i * STEP,
+                  left: 3 + i * FAN_X,
+                  transform: [{ rotate: `${(i - (shown - 1) / 2) * 7}deg` }],
+                }}
               >
                 <InfluenceCard role={role} dead width={CARD_W} />
               </Animated.View>
             ))}
-            {n > 2 ? (
-              <View style={styles.pileCount}>
-                <Text style={styles.pileCountText}>{n}</Text>
-              </View>
-            ) : null}
           </View>
         );
       })}
@@ -839,6 +860,8 @@ export function GameScreen() {
   const denseRef = useRef(false);
   const [peek, setPeek] = useState<Role | null>(null);
   const [fly, setFly] = useState<{ key: number; from: { x: number; y: number } } | null>(null);
+  /** While dealing: how many cards each seat has received so far. */
+  const [dealt, setDealt] = useState<Record<string, number> | null>(null);
   const [deals, setDeals] = useState<
     { key: string; to: { x: number; y: number }; delay: number }[]
   >([]);
@@ -863,6 +886,18 @@ export function GameScreen() {
     [],
   );
   const [notice, setNotice] = useState<SheetMessage | null>(null);
+  /** Challenge is armed and waiting for its confirming tap. */
+  const [armed, setArmed] = useState(false);
+  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Transient line shown when a press arrived too late to count. */
+  const [flash, setFlash] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    },
+    [],
+  );
   void lang;
 
   const g = room?.game as GameState | undefined;
@@ -941,6 +976,7 @@ export function GameScreen() {
     setSelTarget(null);
     setLoseIdx(null);
     setKeepIdxs([]);
+    setArmed(false);
   }, [g?.version]);
 
   /**
@@ -989,16 +1025,31 @@ export function GameScreen() {
         ...seats.map((a) => ({ x: a.x * tableBox.w - 17, y: a.y * tableBox.h + 30 })),
         { x: 0.5 * tableBox.w - 17, y: tableBox.h * 0.78 }, // me, bottom rim
       ];
+      // seat order for the deal: opponents first, me last (targets[] order)
+      const order = [...opp.map((pl) => pl.id), myId!];
+      const STEP = 150;
+      const FLIGHT = 430;
       const round: { key: string; to: { x: number; y: number }; delay: number }[] = [];
       for (let pass = 0; pass < 2; pass++) {
         targets.forEach((to, i) => {
-          round.push({ key: `d${pass}-${i}`, to, delay: (pass * targets.length + i) * 130 });
+          round.push({ key: `d${pass}-${i}`, to, delay: (pass * targets.length + i) * STEP });
         });
       }
+      // hands start empty and fill card by card as each flight lands
+      setDealt(Object.fromEntries(order.map((id) => [id, 0])));
       setDeals(round);
-      const total = round.length * 130 + 500;
-      setTimeout(() => setDeals([]), total);
-      round.forEach((_, i) => setTimeout(() => sound.play('card'), i * 130));
+      round.forEach((d, i) => {
+        const id = order[i % order.length];
+        setTimeout(() => sound.play('card'), d.delay);
+        setTimeout(() => {
+          setDealt((cur) => (cur ? { ...cur, [id]: (cur[id] ?? 0) + 1 } : cur));
+        }, d.delay + FLIGHT - 40);
+      });
+      const total = round.length * STEP + FLIGHT + 120;
+      setTimeout(() => {
+        setDeals([]);
+        setDealt(null); // hands are whole again; normal rendering resumes
+      }, total);
     }
     if (g && g.version > 0) dealtFor.current = g.version;
   }, [g, myId, tableBox]);
@@ -1113,6 +1164,10 @@ export function GameScreen() {
       const err = await move(m);
       if (err) {
         sound.play('error');
+        haptics.medium();
+        setFlash(t('moveStale'));
+        if (flashTimer.current) clearTimeout(flashTimer.current);
+        flashTimer.current = setTimeout(() => setFlash(null), 2400);
         console.log('move rejected:', err);
       }
     } catch {
@@ -1192,14 +1247,22 @@ export function GameScreen() {
   if (g.phase === 'game_over') {
     panel = null; // overlay below
   } else if (isMyTurn) {
-    const actions: { a: ActionType; label: TKey; desc: TKey; cost?: number; role?: Role }[] = [
-      { a: 'income', label: 'income', desc: 'incomeDesc' },
-      { a: 'foreign_aid', label: 'foreign_aid', desc: 'foreignAidDesc' },
-      { a: 'tax', label: 'tax', desc: 'taxDesc', role: 'duke' },
-      { a: 'steal', label: 'steal', desc: 'stealDesc', role: 'captain' },
-      { a: 'exchange', label: 'exchange', desc: 'exchangeDesc', role: 'ambassador' },
-      { a: 'assassinate', label: 'assassinate', desc: 'assassinateDesc', cost: 3, role: 'assassin' },
-      { a: 'coup', label: 'coupAction', desc: 'coupDesc', cost: 7 },
+    const actions: {
+      a: ActionType;
+      label: TKey;
+      cost?: number;
+      role?: Role;
+      /** Net coins for me: shown as a +N / −N pill instead of a sentence. */
+      delta?: number;
+      swap?: number;
+    }[] = [
+      { a: 'income', label: 'income', delta: 1 },
+      { a: 'foreign_aid', label: 'foreign_aid', delta: 2 },
+      { a: 'tax', label: 'tax', role: 'duke', delta: 3 },
+      { a: 'steal', label: 'steal', role: 'captain', delta: 2 },
+      { a: 'exchange', label: 'exchange', role: 'ambassador', swap: 2 },
+      { a: 'assassinate', label: 'assassinate', cost: 3, role: 'assassin', delta: -3 },
+      { a: 'coup', label: 'coupAction', cost: 7, delta: -7 },
     ];
     const sel = actions.find((x) => x.a === selAction);
     const awaitingTarget = !!selAction && needsTarget(selAction) && !selTarget;
@@ -1219,7 +1282,7 @@ export function GameScreen() {
           <Animated.View style={styles.actionGrid} layout={LinearTransition.duration(220)}>
           {actions
             .filter(({ a }) => !selAction || a === selAction)
-            .map(({ a, label, desc, cost, role }) => {
+            .map(({ a, label, cost, role, delta, swap }) => {
             const disabled =
               sending ||
               (cost !== undefined && me.coins < cost) ||
@@ -1260,26 +1323,47 @@ export function GameScreen() {
                     />
                   )}
                 </View>
-                <View style={{ flex: 1 }}>
-                  <View style={[styles.actionHead, rtl && styles.rowReverse]}>
-                    <Text style={[styles.actionName, { color }]} numberOfLines={1}>
-                      {t(label)}
-                    </Text>
-                    {cost !== undefined ? (
-                      <View style={styles.costTag}>
-                        <CoinIcon size={12} />
-                        <Text style={styles.costText}>{cost}</Text>
-                      </View>
-                    ) : null}
-                    {isBluff ? (
-                      <View style={styles.bluffBadge}>
-                        <Text style={styles.bluffText}>{t('bluff')}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={[styles.actionDesc, rtl && styles.rtlText]} numberOfLines={1}>
-                    {t(desc)}
+                <View style={[styles.actionHead, rtl && styles.rowReverse]}>
+                  <Text style={[styles.actionName, { color }]} numberOfLines={1}>
+                    {t(label)}
                   </Text>
+                  {isBluff ? (
+                    <View style={styles.bluffBadge}>
+                      <Text style={styles.bluffText}>{t('bluff')}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {/* what it does, in numbers */}
+                <View style={[styles.pillRow, rtl && styles.rowReverse]}>
+                  {delta !== undefined ? (
+                    <View
+                      style={[
+                        styles.pill,
+                        delta < 0 && { borderColor: theme.colors.danger + '77' },
+                      ]}
+                    >
+                      <CoinIcon size={12} />
+                      <Text
+                        style={[
+                          styles.pillText,
+                          { color: delta < 0 ? theme.colors.danger : theme.colors.goldLight },
+                        ]}
+                      >
+                        {delta > 0 ? `+${delta}` : delta}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {swap ? (
+                    <View style={styles.pill}>
+                      <Ionicons name="swap-horizontal" size={13} color={theme.colors.inkSoft} />
+                      <Text style={styles.pillText}>{swap}</Text>
+                    </View>
+                  ) : null}
+                  {needsTarget(a) ? (
+                    <View style={styles.pill}>
+                      <Ionicons name="person" size={12} color={theme.colors.inkSoft} />
+                    </View>
+                  ) : null}
                 </View>
               </Pressy>
               </Animated.View>
@@ -1335,6 +1419,10 @@ export function GameScreen() {
     const claimedRole = isBlockChallenge ? pending.block!.role : pending.claimedRole;
     const actionLabel = t(ACTION_LABEL[pending.action]);
     const blockRoles = g.phase === 'block' ? BLOCK_ROLES[pending.action] ?? [] : [];
+    const answeredPlayers = g.players.filter((p) => isAlive(p) && hasPassed(p.id));
+    const waitingPlayers = responders
+      .map((id) => g.players.find((p) => p.id === id))
+      .filter((p): p is PlayerState => !!p);
     const canStillBlock =
       g.phase === 'action_challenge' &&
       (BLOCK_ROLES[pending.action] ?? []).length > 0 &&
@@ -1360,20 +1448,47 @@ export function GameScreen() {
             {targetName ? ` — ${t('onPlayer', { name: targetName })}` : ''}
           </Text>
         ) : null}
-        <Text style={styles.tallyText}>
-          {t('respondedTally', {
-            done: g.players.filter((p) => isAlive(p) && hasPassed(p.id)).length,
-            total:
-              g.players.filter((p) => isAlive(p) && hasPassed(p.id)).length + responders.length,
+        {/* Who still owes an answer, as faces rather than a bare fraction */}
+        <View style={[styles.tallyRow, rtl && styles.rowReverse]}>
+          {[...answeredPlayers, ...waitingPlayers].map((rp) => {
+            const done = hasPassed(rp.id);
+            return (
+              <View key={rp.id} style={styles.tallyPip}>
+                <View style={done ? undefined : styles.tallyPipWaiting}>
+                  <Avatar id={avatarOf(rp.id)} size={24} ring={1.2} />
+                </View>
+                <View style={[styles.tallyMark, done && styles.tallyMarkDone]}>
+                  {done ? (
+                    <Ionicons name="checkmark-sharp" size={9} color={theme.colors.success} />
+                  ) : (
+                    <Hourglass size={8} color={theme.colors.warning} hold={1200} />
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+        <Text style={[styles.tallyText, rtl && styles.rtlText]}>
+          {t('tallyLine', {
+            done: answeredPlayers.length,
+            total: answeredPlayers.length + waitingPlayers.length,
+            who:
+              waitingPlayers.length === 1
+                ? waitingPlayers[0].id === me.id
+                  ? t('tallyYou')
+                  : waitingPlayers[0].name
+                : t('tallyPlayers', { n: waitingPlayers.length }),
           })}
         </Text>
-        <Text style={[styles.respHint, rtl && styles.rtlText]}>
-          {g.phase === 'block'
-            ? t('hintBlockWindow')
-            : isBlockChallenge
-              ? t('hintBlockChallengeWindow')
-              : t('hintChallengeWindow')}
-        </Text>
+        {g.phase === 'block' || isBlockChallenge || canStillBlock ? (
+          <Text style={[styles.respHint, rtl && styles.rtlText]}>
+            {g.phase === 'block'
+              ? t('hintBlockShort')
+              : isBlockChallenge
+                ? t('hintBlockChallengeShort')
+                : t('hintChallengeShort')}
+          </Text>
+        ) : null}
         <View style={styles.respOpts}>
           {/* Blocking IS a claim of your own — say so on the button. */}
           {blockRoles.map((r, bi) => (
@@ -1393,13 +1508,28 @@ export function GameScreen() {
                 onPress={() => dispatch({ type: 'block', role: r })}
               >
                 <RolePortrait role={r} size={30} ring={1.5} />
-                <View style={styles.respOptBody}>
-                  <Text style={[styles.respOptTitle, { color: roleColors[r] }, rtl && styles.rtlText]}>
-                    {t('optClaimTitle', { role: t(r as TKey) })}
-                  </Text>
-                  <Text style={[styles.respOptDesc, rtl && styles.rtlText]}>
-                    {t('optClaimDesc', { action: actionLabel, name: actorName })}
-                  </Text>
+                <Text
+                  style={[
+                    styles.respOptTitle,
+                    styles.respOptGrow,
+                    { color: roleColors[r] },
+                    rtl && styles.rtlText,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t('optClaimShort', { role: t(r as TKey) })}
+                </Text>
+                <View style={[styles.pillRow, rtl && styles.rowReverse]}>
+                  <View style={styles.pill}>
+                    <Ionicons name="ban" size={12} color={theme.colors.inkSoft} />
+                    <Text style={styles.pillText} numberOfLines={1}>
+                      {actionLabel}
+                    </Text>
+                  </View>
+                  {/* they can challenge this claim */}
+                  <View style={styles.pill}>
+                    <Ionicons name="flash" size={12} color={theme.colors.warning} />
+                  </View>
                 </View>
               </Pressy>
             </Animated.View>
@@ -1409,28 +1539,65 @@ export function GameScreen() {
               <Pressy
                 scaleTo={0.97}
                 disabled={sending}
-                style={[styles.respOpt, styles.respOptDanger, rtl && styles.rowReverse]}
-                onPress={() => dispatch({ type: 'challenge' })}
+                style={[
+                  styles.respOpt,
+                  styles.respOptDanger,
+                  armed && styles.respOptArmed,
+                  rtl && styles.rowReverse,
+                ]}
+                onPress={() => {
+                  if (!armed) {
+                    haptics.medium();
+                    sound.play('select');
+                    setArmed(true);
+                    if (armTimer.current) clearTimeout(armTimer.current);
+                    armTimer.current = setTimeout(() => setArmed(false), 3200);
+                    return;
+                  }
+                  setArmed(false);
+                  dispatch({ type: 'challenge' });
+                }}
               >
                 <View style={styles.respOptIcon}>
                   <Ionicons name="flash" size={17} color={theme.colors.danger} />
                 </View>
-                <View style={styles.respOptBody}>
-                  <Text
-                    style={[
-                      styles.respOptTitle,
-                      { color: theme.colors.danger },
-                      rtl && styles.rtlText,
-                    ]}
-                  >
-                    {t('optChallengeTitle')}
-                  </Text>
-                  <Text style={[styles.respOptDesc, rtl && styles.rtlText]}>
-                    {t('optChallengeDesc', {
-                      name: claimer,
-                      role: t((claimedRole ?? 'duke') as TKey),
-                    })}
-                  </Text>
+                <Text
+                  style={[
+                    styles.respOptTitle,
+                    styles.respOptGrow,
+                    { color: theme.colors.danger },
+                    rtl && styles.rtlText,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t('optChallengeShort')}
+                </Text>
+                <View style={[styles.pillRow, rtl && styles.rowReverse]}>
+                  {armed ? (
+                    <View style={[styles.pill, styles.pillArmed]}>
+                      <Ionicons name="hand-left" size={12} color={theme.colors.danger} />
+                      <Text style={[styles.pillText, { color: theme.colors.danger }]}>
+                        {t('pillTapAgain')}
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      {/* "they have no <role>" */}
+                      {claimedRole ? (
+                        <View style={styles.pill}>
+                          <RolePortrait role={claimedRole} size={15} ring={1} />
+                          <Ionicons name="close" size={12} color={theme.colors.danger} />
+                        </View>
+                      ) : null}
+                      {/* wrong = one influence gone */}
+                      <View style={[styles.pill, { borderColor: theme.colors.danger + '77' }]}>
+                        <Ionicons name="warning-outline" size={12} color={theme.colors.danger} />
+                        <Text style={[styles.pillText, { color: theme.colors.danger }]}>
+                          {t('pillRiskCard')}
+                        </Text>
+                      </View>
+                    </>
+                  )}
                 </View>
               </Pressy>
             </Animated.View>
@@ -1448,23 +1615,30 @@ export function GameScreen() {
               <View style={styles.respOptIcon}>
                 <Ionicons name="hand-left-outline" size={17} color={theme.colors.inkSoft} />
               </View>
-              <View style={styles.respOptBody}>
-                <Text style={[styles.respOptTitle, rtl && styles.rtlText]}>
-                  {g.phase === 'block'
-                    ? t('optLetItTitle')
-                    : isBlockChallenge
-                      ? t('optAcceptBlockTitle')
-                      : t('optNoChallengeTitle')}
-                </Text>
-                <Text style={[styles.respOptDesc, rtl && styles.rtlText]}>
-                  {g.phase === 'block'
-                    ? t('optLetItDesc', { action: actionLabel })
-                    : isBlockChallenge
-                      ? t('optAcceptBlockDesc', { action: actionLabel })
-                      : canStillBlock
-                        ? t('optNoChallengeDescBlock')
-                        : t('optNoChallengeDesc', { action: actionLabel })}
-                </Text>
+              <Text
+                style={[styles.respOptTitle, styles.respOptGrow, rtl && styles.rtlText]}
+                numberOfLines={1}
+              >
+                {isBlockChallenge ? t('optAcceptShort') : t('optAllowShort')}
+              </Text>
+              <View style={[styles.pillRow, rtl && styles.rowReverse]}>
+                {canStillBlock ? (
+                  <View style={styles.pill}>
+                    <Ionicons name="shield-outline" size={12} color={theme.colors.inkSoft} />
+                    <Text style={styles.pillText}>{t('pillBlockNext')}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.pill}>
+                    <Ionicons
+                      name={isBlockChallenge ? 'ban' : 'arrow-forward'}
+                      size={12}
+                      color={theme.colors.inkSoft}
+                    />
+                    <Text style={styles.pillText} numberOfLines={1}>
+                      {actionLabel}
+                    </Text>
+                  </View>
+                )}
               </View>
             </Pressy>
           </Animated.View>
@@ -1608,23 +1782,27 @@ export function GameScreen() {
         <Text style={styles.roomCode}>{room!.code}</Text>
         {secsLeft !== null ? (
           <Animated.View
-            entering={ZoomIn.duration(220)}
-            exiting={ZoomOut.duration(180)}
-            style={[
-              styles.clockChip,
-              secsLeft <= 5 && { borderColor: theme.colors.danger },
-            ]}
+            entering={FadeInDown.duration(280).easing(Easing.out(Easing.cubic))}
+            exiting={FadeOutUp.duration(220).easing(Easing.in(Easing.cubic))}
+            style={[styles.clockChip, secsLeft <= 5 && { borderColor: theme.colors.danger }]}
           >
-            <Ionicons
-              name="time-outline"
+            <Hourglass
               size={13}
               color={secsLeft <= 5 ? theme.colors.danger : theme.colors.inkSoft}
+              outline
+              hold={secsLeft <= 5 ? 700 : 1500}
             />
-            <Text
-              style={[styles.clockText, secsLeft <= 5 && { color: theme.colors.danger }]}
-            >
-              {secsLeft}
-            </Text>
+            {/* each second slides in as the last one slides out */}
+            <View style={styles.clockDigits}>
+              <Animated.Text
+                key={secsLeft}
+                entering={FadeInDown.duration(200).easing(Easing.out(Easing.quad))}
+                exiting={FadeOutUp.duration(180).easing(Easing.in(Easing.quad))}
+                style={[styles.clockText, secsLeft <= 5 && { color: theme.colors.danger }]}
+              >
+                {secsLeft}
+              </Animated.Text>
+            </View>
           </Animated.View>
         ) : null}
         <Pressy
@@ -1742,6 +1920,7 @@ export function GameScreen() {
             passed={hasPassed(p.id)}
             dense={dense}
             tell={tells[p.id]}
+            dealt={dealt ? dealt[p.id] ?? 0 : undefined}
             onTarget={() => {
               if (!targetable(p)) return;
               haptics.selection();
@@ -1795,6 +1974,7 @@ export function GameScreen() {
             key={`fly-${fly.key}`}
             from={fly.from}
             to={{ x: tableBox.w * 0.5 - 17, y: tableBox.h * 0.40 }}
+            toss
           />
         ) : null}
         {/* me, seated at the bottom of the table — my cards face-up so
@@ -1813,6 +1993,7 @@ export function GameScreen() {
           claim={claimOf(me.id)}
           passed={hasPassed(me.id)}
           dense={dense}
+          dealt={dealt ? dealt[me.id] ?? 0 : undefined}
           showFaces
         />
       </Animated.View>
@@ -1837,7 +2018,7 @@ export function GameScreen() {
           <AnimatedCoins amount={me.coins} size={20} chip />
         </View>
         <View style={styles.hand}>
-          {me.cards.map((c, i) => (
+          {(dealt ? me.cards.slice(0, dealt[me.id] ?? 0) : me.cards).map((c, i) => (
             <Pressy
               key={i}
               scaleTo={0.95}
@@ -1853,13 +2034,15 @@ export function GameScreen() {
                 }
               }}
             >
-              <InfluenceCard
-                role={c.role}
-                dead={c.revealed}
-                width={92}
-                selected={iLose && loseIdx === i}
-                tilt={i === 0 ? -3 : 3}
-              />
+              <Animated.View entering={FlipInEasyY.duration(420)}>
+                <InfluenceCard
+                  role={c.role}
+                  dead={c.revealed}
+                  width={92}
+                  selected={iLose && loseIdx === i}
+                  tilt={i === 0 ? -3 : 3}
+                />
+              </Animated.View>
             </Pressy>
           ))}
         </View>
@@ -1878,6 +2061,16 @@ export function GameScreen() {
           onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
         >
           <View style={styles.sheetHandle} />
+          {flash ? (
+            <Animated.View
+              entering={FadeInDown.duration(180)}
+              exiting={FadeOut.duration(200)}
+              style={styles.flashPill}
+            >
+              <Ionicons name="alert-circle-outline" size={14} color={theme.colors.danger} />
+              <Text style={styles.flashText}>{flash}</Text>
+            </Animated.View>
+          ) : null}
           {panel}
         </Animated.View>
       ) : null}
@@ -2055,11 +2248,18 @@ const makeStyles = (theme: Theme) =>
       height: 28,
       backgroundColor: 'rgba(8,10,14,0.85)',
     },
+    clockDigits: {
+      minWidth: 18,
+      height: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
     clockText: {
-      fontSize: 13,
+      position: 'absolute',
+      fontSize: 14,
       fontFamily: latinFont('bold'),
       color: theme.colors.ink,
-      minWidth: 16,
       textAlign: 'center',
     },
     deckChip: {
@@ -2179,25 +2379,6 @@ const makeStyles = (theme: Theme) =>
       backgroundColor: '#232733',
       borderWidth: 1.5,
       borderColor: theme.colors.goldDark,
-    },
-    pileCount: {
-      position: 'absolute',
-      right: -6,
-      bottom: -6,
-      minWidth: 18,
-      height: 18,
-      borderRadius: 9,
-      paddingHorizontal: 4,
-      backgroundColor: '#05070a',
-      borderWidth: 1.5,
-      borderColor: theme.colors.goldLight,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    pileCountText: {
-      fontSize: 10.5,
-      fontFamily: latinFont('bold'),
-      color: '#ffffff',
     },
     centerRow: {
       flexDirection: 'row',
@@ -2636,13 +2817,14 @@ const makeStyles = (theme: Theme) =>
       borderWidth: 1.5,
       borderRadius: theme.radius.sm,
       paddingHorizontal: 10,
-      paddingVertical: 6,
+      paddingVertical: 8,
     },
     actionIcon: {
       width: 36,
       alignItems: 'center',
     },
     actionHead: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
@@ -2650,6 +2832,27 @@ const makeStyles = (theme: Theme) =>
     actionName: {
       fontSize: 15,
       fontFamily: font('bold'),
+    },
+    pillRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 7,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: 'rgba(8,10,14,0.55)',
+    },
+    pillText: {
+      fontSize: 12,
+      fontFamily: latinFont('bold'),
+      color: theme.colors.inkSoft,
     },
     actionDesc: {
       fontSize: 13,
@@ -2791,6 +2994,24 @@ const makeStyles = (theme: Theme) =>
       gap: 8,
       justifyContent: 'center',
     },
+    flashPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      height: 30,
+      borderRadius: 15,
+      borderWidth: 1,
+      borderColor: theme.colors.danger + '88',
+      backgroundColor: theme.colors.danger + '1e',
+      marginBottom: 6,
+    },
+    flashText: {
+      fontSize: 12.5,
+      fontFamily: font('semibold'),
+      color: theme.colors.danger,
+    },
     respHint: {
       fontSize: 13,
       fontFamily: font('semibold'),
@@ -2813,6 +3034,14 @@ const makeStyles = (theme: Theme) =>
       borderColor: 'rgba(255,255,255,0.14)',
       backgroundColor: 'rgba(22,25,32,0.92)',
     },
+    respOptArmed: {
+      borderColor: theme.colors.danger,
+      backgroundColor: theme.colors.danger + '30',
+    },
+    pillArmed: {
+      borderColor: theme.colors.danger,
+      backgroundColor: theme.colors.danger + '22',
+    },
     respOptDanger: {
       borderColor: theme.colors.danger + '88',
       backgroundColor: theme.colors.danger + '18',
@@ -2829,6 +3058,9 @@ const makeStyles = (theme: Theme) =>
       flex: 1,
       gap: 1,
     },
+    respOptGrow: {
+      flex: 1,
+    },
     respOptTitle: {
       fontSize: 15,
       fontFamily: font('bold'),
@@ -2840,12 +3072,41 @@ const makeStyles = (theme: Theme) =>
       fontFamily: font('regular'),
       color: theme.colors.inkSoft,
     },
+    tallyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      marginTop: 2,
+    },
+    tallyPip: {
+      width: 24,
+      height: 24,
+    },
+    tallyPipWaiting: {
+      opacity: 0.42,
+    },
+    tallyMark: {
+      position: 'absolute',
+      bottom: -3,
+      right: -5,
+      width: 14,
+      height: 14,
+      borderRadius: 7,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(8,10,14,0.96)',
+      borderWidth: 1,
+      borderColor: theme.colors.warning + 'aa',
+    },
+    tallyMarkDone: {
+      borderColor: theme.colors.success + 'cc',
+    },
     tallyText: {
       fontSize: 12.5,
       fontFamily: font('semibold'),
-      color: theme.colors.inkFaint,
+      color: theme.colors.inkSoft,
       textAlign: 'center',
-      marginTop: -4,
     },
     waitRow: {
       flexDirection: 'row',

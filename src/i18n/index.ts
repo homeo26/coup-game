@@ -165,6 +165,12 @@ export const dict = {
   waitingOthers: { en: 'Waiting for other players…', ar: 'بانتظار اللاعبين الآخرين…' },
   several: { en: '{n} players', ar: '{n} لاعبين' },
   respondedTally: { en: '{done} of {total} answered', ar: 'أجاب {done} من {total}' },
+  tallyLine: {
+    en: '{done} of {total} answered · waiting on {who}',
+    ar: 'أجاب {done} من {total} · بانتظار {who}',
+  },
+  tallyPlayers: { en: '{n} players', ar: '{n} لاعبين' },
+  tallyYou: { en: 'you', ar: 'عليك' },
   waitChallenge: {
     en: '{who} deciding whether to challenge {name}’s {role}…',
     ar: '{who} يقرر إن كان سيتحدى {role} لـ{name}…',
@@ -335,6 +341,18 @@ export const dict = {
     en: 'The block is a claim too — challenge it or accept it.',
     ar: 'الصدّ ادعاء أيضًا — تحدّه أو اقبله.',
   },
+  // Short forms: the response sheet speaks in pills, not paragraphs
+  hintChallengeShort: { en: 'Blocking comes after', ar: 'الصدّ يأتي بعده' },
+  hintBlockShort: { en: 'A block is a claim of your own', ar: 'الصدّ ادعاء منك' },
+  hintBlockChallengeShort: { en: 'A block is a claim too', ar: 'الصدّ ادعاء أيضًا' },
+  optChallengeShort: { en: 'Challenge', ar: 'تحدَّ' },
+  optClaimShort: { en: 'Claim {role}', ar: 'ادّعِ {role}' },
+  optAllowShort: { en: 'Allow', ar: 'اسمح' },
+  optAcceptShort: { en: 'Accept', ar: 'اقبل' },
+  pillRiskCard: { en: '1 card', ar: 'بطاقة' },
+  pillTapAgain: { en: 'tap again', ar: 'انقر مرة أخرى' },
+  moveStale: { en: 'Too late — the table moved on', ar: 'فات الوقت — تقدّمت الطاولة' },
+  pillBlockNext: { en: 'block next', ar: 'الصدّ تاليًا' },
   optChallengeTitle: { en: 'Challenge the claim', ar: 'تحدَّ الادعاء' },
   optChallengeDesc: {
     en: 'You say {name} has no {role}. If they do, you lose a card.',
