@@ -139,6 +139,37 @@ export function SettingsScreen() {
           </View>
         </View>
 
+        {/* Turn clock (offline games; online is set by the host in the lobby) */}
+        <View style={styles.card}>
+          <View style={[styles.row, rtl && styles.rowReverse]}>
+            <Ionicons name="timer-outline" size={20} color={theme.colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowTitle, rtlText]}>{t('turnTimerSetting')}</Text>
+              <Text style={[styles.rowDesc, rtlText]}>{t('turnTimerDesc')}</Text>
+            </View>
+          </View>
+          <View style={[styles.segment, rtl && styles.rowReverse]}>
+            {[0, 30, 60].map((secs) => {
+              const active = settings.turnTimer === secs;
+              return (
+                <Pressy
+                  key={secs}
+                  scaleTo={0.95}
+                  style={[styles.segmentBtn, active && styles.segmentActive]}
+                  onPress={() => {
+                    haptics.selection();
+                    settings.set('turnTimer', secs);
+                  }}
+                >
+                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                    {secs === 0 ? t('timerOff') : `${secs}s`}
+                  </Text>
+                </Pressy>
+              );
+            })}
+          </View>
+        </View>
+
         {/* About */}
         <View style={styles.card}>
           <View style={[styles.row, rtl && styles.rowReverse]}>

@@ -187,7 +187,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       ];
       detach();
       setLocalChat([]);
-      setLocalGame(newGame(roster));
+      setLocalGame(newGame(roster, undefined, getSettings().turnTimer));
     },
     [myId, detach],
   );
@@ -270,7 +270,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
   const again = useCallback(async () => {
     if (localGame && myId) {
       const roster = localGame.players.map((p) => ({ id: p.id, name: p.name }));
-      setLocalGame(newGame(roster));
+      setLocalGame(newGame(roster, undefined, localGame.timerSec));
       return;
     }
     if (code) await playAgain(code);
@@ -289,7 +289,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
           avatar: p.id === myId ? getSettings().avatar : personaFor(p.id)?.avatar,
         })),
         chat: localChat,
-        timerSec: 0,
+        timerSec: localGame.timerSec,
         game: localGame,
       };
     }

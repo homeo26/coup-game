@@ -322,6 +322,11 @@ export const dict = {
   audioSection: { en: 'Audio', ar: 'الصوت' },
   playSection: { en: 'Play', ar: 'اللعب' },
   tellsSetting: { en: 'Bot tells', ar: 'أمارات الروبوتات' },
+  turnTimerSetting: { en: 'Turn clock', ar: 'مؤقت الدور' },
+  turnTimerDesc: {
+    en: 'Time limit per decision in offline games — online, the host sets it',
+    ar: 'حدّ الوقت لكل قرار في اللعب دون اتصال — أما عبر الإنترنت فيحدّده المضيف',
+  },
   tellsDesc: {
     en: 'A bluffing bot gives a subtle sign (offline games only)',
     ar: 'الروبوت المخادع يُبدي إشارة خفيفة (في اللعب دون اتصال فقط)',

@@ -14,6 +14,8 @@ export interface Settings {
   music: boolean;
   /** Show a subtle sign when an offline bot is bluffing. */
   tells: boolean;
+  /** Seconds each decision gets in an offline game (0 = no clock). */
+  turnTimer: number;
   /** Character portrait used as the player's avatar. */
   avatar: string;
   playerName: string;
@@ -27,6 +29,7 @@ const DEFAULTS: Settings = {
   sounds: true,
   music: true,
   tells: false,
+  turnTimer: 30,
   avatar: ANIMALS[Math.floor(Math.random() * ANIMALS.length)],
   playerName: '',
 };

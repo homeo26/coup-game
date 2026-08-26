@@ -110,6 +110,7 @@ export function newGame(
   roster: { id: string; name: string }[],
   rand: () => number = Math.random,
   timerSec = 0,
+  nowMs: number = Date.now(),
 ): GameState {
   if (roster.length < MIN_PLAYERS || roster.length > MAX_PLAYERS) {
     throw new Error('players must be 2-6');
@@ -139,7 +140,7 @@ export function newGame(
     winner: null,
     eliminated: [],
     timerSec,
-    deadlineMs: 0,
+    deadlineMs: timerSec > 0 ? nowMs + timerSec * 1000 : 0,
     log: [],
     version: 0,
   };
