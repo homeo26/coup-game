@@ -248,15 +248,7 @@ function CoinDelta({ delta }: { delta: number }) {
 }
 
 /** Coin count that pulses whenever the amount changes, with a floating delta. */
-function AnimatedCoins({
-  amount,
-  size,
-  chip,
-}: {
-  amount: number;
-  size: number;
-  chip?: boolean;
-}) {
+function AnimatedCoins({ amount, size, chip }: { amount: number; size: number; chip?: boolean }) {
   const scale = useSharedValue(1);
   const prev = useRef(amount);
   const [delta, setDelta] = useState<{ n: number; key: number } | null>(null);
@@ -291,8 +283,15 @@ function AnimatedCoins({
  *  anchoring each seat's center) — mirrors a real round table. */
 const SEAT_ANCHORS: Record<number, { x: number; y: number }[]> = {
   1: [{ x: 0.5, y: -0.04 }],
-  2: [{ x: 0.13, y: 0.38 }, { x: 0.87, y: 0.38 }],
-  3: [{ x: 0.13, y: 0.42 }, { x: 0.5, y: -0.04 }, { x: 0.87, y: 0.42 }],
+  2: [
+    { x: 0.13, y: 0.38 },
+    { x: 0.87, y: 0.38 },
+  ],
+  3: [
+    { x: 0.13, y: 0.42 },
+    { x: 0.5, y: -0.04 },
+    { x: 0.87, y: 0.42 },
+  ],
   4: [
     { x: 0.12, y: 0.5 },
     { x: 0.26, y: 0.07 },
@@ -367,17 +366,7 @@ function TableSeat({
   const AV = compact ? (dense ? 40 : 44) : dense ? 50 : 58; // avatar size
   // real cards even on a crowded table — just smaller and tucked closer.
   // My own seat keeps big cards: they are the ones I have to read.
-  const CARD = showFaces
-    ? compact
-      ? 38
-      : 44
-    : dense
-      ? compact
-        ? 26
-        : 30
-      : compact
-        ? 34
-        : 44;
+  const CARD = showFaces ? (compact ? 38 : 44) : dense ? (compact ? 26 : 30) : compact ? 34 : 44;
   const COIN = dense ? 13 : compact ? 14 : 18; // coin glyph size
 
   /** The name chip turns silver on the active seat: dark ink, not white. */
@@ -543,7 +532,12 @@ function TableSeat({
           style={[
             styles.seatNameChip,
             onSilver && styles.seatNameChipTurn,
-            claim && { borderColor: roleColors[claim], backgroundColor: 'rgba(6,8,12,0.96)' },
+            claim && {
+              borderColor: roleColors[claim],
+              backgroundColor: 'rgba(6,8,12,0.96)',
+              // a claim earns a little more room than a bare name
+              maxWidth: SEAT_W + 40,
+            },
             dead && { opacity: 0.6 },
           ]}
         >
@@ -552,16 +546,25 @@ function TableSeat({
               <RolePortrait role={claim} size={15} ring={1} />
             </Animated.View>
           ) : null}
-          <Text
-            style={[
-              styles.seatNameText,
-              onSilver && styles.seatNameTextTurn,
-              claim && { color: roleColors[claim] },
-            ]}
-            numberOfLines={1}
-          >
-            {claim ? `${p.name} · ${t(claim as TKey)}` : p.name}
-          </Text>
+          {claim && dense ? null : (
+            <Text
+              style={[
+                styles.seatNameText,
+                onSilver && styles.seatNameTextTurn,
+                claim && { color: roleColors[claim] },
+                claim && styles.seatNameShrink,
+              ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {p.name}
+            </Text>
+          )}
+          {claim ? (
+            <Text style={[styles.seatRoleText, { color: roleColors[claim] }]} numberOfLines={1}>
+              {dense ? t(claim as TKey) : `· ${t(claim as TKey)}`}
+            </Text>
+          ) : null}
           {dense && !dead ? (
             <>
               <View style={[styles.chipDivider, onSilver && styles.chipDividerOnSilver]} />
@@ -612,7 +615,10 @@ function AttackFx({
   const styles = useStyles(makeStyles);
   const t = useSharedValue(0);
   useEffect(() => {
-    t.value = withTiming(1, { duration: kind === 'steal' ? 620 : 520, easing: Easing.inOut(Easing.cubic) });
+    t.value = withTiming(1, {
+      duration: kind === 'steal' ? 620 : 520,
+      easing: Easing.inOut(Easing.cubic),
+    });
   }, [t, kind]);
   const lift = kind === 'assassinate' ? 70 : 26;
   const st = useAnimatedStyle(() => ({
@@ -685,10 +691,7 @@ function DiscardPiles({ g, onPress }: { g: GameState; onPress?: () => void }) {
   const STEP = 13;
   const piles = ROLES.map((r) => ({
     role: r,
-    n: g.players.reduce(
-      (k, p) => k + p.cards.filter((c) => c.revealed && c.role === r).length,
-      0,
-    ),
+    n: g.players.reduce((k, p) => k + p.cards.filter((c) => c.revealed && c.role === r).length, 0),
   })).filter((x) => x.n > 0);
   if (piles.length === 0) return null;
   return (
@@ -762,7 +765,10 @@ function DeckTracker({ g, onClose }: { g: GameState; onClose: () => void }) {
                       style={[
                         styles.trackerPip,
                         isDead
-                          ? { borderColor: theme.colors.danger + '77', backgroundColor: theme.colors.danger + '1c' }
+                          ? {
+                              borderColor: theme.colors.danger + '77',
+                              backgroundColor: theme.colors.danger + '1c',
+                            }
                           : { borderColor: theme.colors.borderBright },
                       ]}
                     >
@@ -942,7 +948,13 @@ export function GameScreen() {
   // the Court to every seat around the table.
   const dealtFor = useRef<number>(-1);
   useEffect(() => {
-    if (g && g.version === 0 && dealtFor.current !== 0 && g.phase !== 'game_over' && tableBox.w > 0) {
+    if (
+      g &&
+      g.version === 0 &&
+      dealtFor.current !== 0 &&
+      g.phase !== 'game_over' &&
+      tableBox.w > 0
+    ) {
       dealtFor.current = 0;
       sound.play('shuffle');
       const opp = g.players.filter((pl) => pl.id !== myId);
@@ -1041,7 +1053,7 @@ export function GameScreen() {
           const anchor =
             loser.id === myId
               ? { x: 0.5, y: 0.64 }
-              : SEAT_ANCHORS[opp.length]?.[idx] ?? { x: 0.5, y: 0.3 };
+              : (SEAT_ANCHORS[opp.length]?.[idx] ?? { x: 0.5, y: 0.3 });
           setFly({
             key: logLen,
             from: { x: anchor.x * tableBox.w - 17, y: anchor.y * tableBox.h + 40 },
@@ -1086,9 +1098,7 @@ export function GameScreen() {
   const needsTarget = (a: ActionType) => a === 'coup' || a === 'assassinate' || a === 'steal';
 
   /** Roles I actually hold (unrevealed) — used to flag bluffs honestly. */
-  const myRoles = me
-    ? me.cards.filter((c) => !c.revealed).map((c) => c.role)
-    : [];
+  const myRoles = me ? me.cards.filter((c) => !c.revealed).map((c) => c.role) : [];
 
   const selectAction = (action: ActionType) => {
     haptics.selection();
@@ -1143,9 +1153,9 @@ export function GameScreen() {
   /* ----- context panel by phase ----- */
 
   const pending = g.pending;
-  const actorName = pending ? g.players.find((p) => p.id === pending.actor)?.name ?? '' : '';
+  const actorName = pending ? (g.players.find((p) => p.id === pending.actor)?.name ?? '') : '';
   const targetName = pending?.target
-    ? g.players.find((p) => p.id === pending.target)?.name ?? ''
+    ? (g.players.find((p) => p.id === pending.target)?.name ?? '')
     : '';
 
   let panel: React.ReactNode = null;
@@ -1159,93 +1169,107 @@ export function GameScreen() {
       { a: 'tax', label: 'tax', desc: 'taxDesc', role: 'duke' },
       { a: 'steal', label: 'steal', desc: 'stealDesc', role: 'captain' },
       { a: 'exchange', label: 'exchange', desc: 'exchangeDesc', role: 'ambassador' },
-      { a: 'assassinate', label: 'assassinate', desc: 'assassinateDesc', cost: 3, role: 'assassin' },
+      {
+        a: 'assassinate',
+        label: 'assassinate',
+        desc: 'assassinateDesc',
+        cost: 3,
+        role: 'assassin',
+      },
       { a: 'coup', label: 'coupAction', desc: 'coupDesc', cost: 7 },
     ];
     const sel = actions.find((x) => x.a === selAction);
     const awaitingTarget = !!selAction && needsTarget(selAction) && !selTarget;
-    const targetLabel = selTarget
-      ? g.players.find((p) => p.id === selTarget)?.name ?? ''
-      : '';
+    const targetLabel = selTarget ? (g.players.find((p) => p.id === selTarget)?.name ?? '') : '';
     panel = (
       <Animated.View entering={FadeIn.duration(180)} style={styles.panel}>
         <Text style={styles.panelTitle}>{mustCoup ? t('mustCoup') : t('chooseAction')}</Text>
         {/* Cap the list height so the seats above always stay visible
             and tappable (target picking must never be covered). */}
         <ScrollView
-          style={{ maxHeight: Math.round(winH * 0.30) }}
+          style={{ maxHeight: Math.round(winH * 0.3) }}
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}
         >
           <Animated.View style={styles.actionGrid} layout={LinearTransition.duration(220)}>
-          {actions
-            .filter(({ a }) => !selAction || a === selAction)
-            .map(({ a, label, desc, cost, role }) => {
-            const disabled =
-              sending ||
-              (cost !== undefined && me.coins < cost) ||
-              (mustCoup && a !== 'coup') ||
-              // coup / assassinate / steal all just need a living target
-              // (stealing from a broke player is legal — it can bait a
-              // challenge — the amount taken is simply capped at what they have)
-              ((a === 'steal' || a === 'coup' || a === 'assassinate') &&
-                !opponents.some((o) => isAlive(o)));
-            const isSel = selAction === a;
-            const isBluff = !!role && !myRoles.includes(role);
-            const color = role ? roleColors[role] : a === 'coup' ? theme.colors.danger : theme.colors.gold;
-            return (
-              <Animated.View
-                key={a}
-                entering={FadeIn.duration(180)}
-                exiting={FadeOut.duration(140)}
-                layout={LinearTransition.duration(220)}
-              >
-              <Pressy
-                scaleTo={0.96}
-                disabled={disabled}
-                onPress={() => selectAction(a)}
-                style={[
-                  styles.actionRow,
-                  { borderColor: isSel ? color : theme.colors.border },
-                  isSel && { backgroundColor: color + '1e' },
-                ]}
-              >
-                <View style={styles.actionIcon}>
-                  {role ? (
-                    <RolePortrait role={role} size={34} ring={1.5} />
-                  ) : (
-                    <Ionicons
-                      name={a === 'coup' ? 'skull' : a === 'income' ? 'add-circle' : 'cash-outline'}
-                      size={26}
-                      color={color}
-                    />
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={[styles.actionHead, rtl && styles.rowReverse]}>
-                    <Text style={[styles.actionName, { color }]} numberOfLines={1}>
-                      {t(label)}
-                    </Text>
-                    {cost !== undefined ? (
-                      <View style={styles.costTag}>
-                        <CoinIcon size={12} />
-                        <Text style={styles.costText}>{cost}</Text>
+            {actions
+              .filter(({ a }) => !selAction || a === selAction)
+              .map(({ a, label, desc, cost, role }) => {
+                const disabled =
+                  sending ||
+                  (cost !== undefined && me.coins < cost) ||
+                  (mustCoup && a !== 'coup') ||
+                  // coup / assassinate / steal all just need a living target
+                  // (stealing from a broke player is legal — it can bait a
+                  // challenge — the amount taken is simply capped at what they have)
+                  ((a === 'steal' || a === 'coup' || a === 'assassinate') &&
+                    !opponents.some((o) => isAlive(o)));
+                const isSel = selAction === a;
+                const isBluff = !!role && !myRoles.includes(role);
+                const color = role
+                  ? roleColors[role]
+                  : a === 'coup'
+                    ? theme.colors.danger
+                    : theme.colors.gold;
+                return (
+                  <Animated.View
+                    key={a}
+                    entering={FadeIn.duration(180)}
+                    exiting={FadeOut.duration(140)}
+                    layout={LinearTransition.duration(220)}
+                  >
+                    <Pressy
+                      scaleTo={0.96}
+                      disabled={disabled}
+                      onPress={() => selectAction(a)}
+                      style={[
+                        styles.actionRow,
+                        { borderColor: isSel ? color : theme.colors.border },
+                        isSel && { backgroundColor: color + '1e' },
+                      ]}
+                    >
+                      <View style={styles.actionIcon}>
+                        {role ? (
+                          <RolePortrait role={role} size={34} ring={1.5} />
+                        ) : (
+                          <Ionicons
+                            name={
+                              a === 'coup'
+                                ? 'skull'
+                                : a === 'income'
+                                  ? 'add-circle'
+                                  : 'cash-outline'
+                            }
+                            size={26}
+                            color={color}
+                          />
+                        )}
                       </View>
-                    ) : null}
-                    {isBluff ? (
-                      <View style={styles.bluffBadge}>
-                        <Text style={styles.bluffText}>{t('bluff')}</Text>
+                      <View style={{ flex: 1 }}>
+                        <View style={[styles.actionHead, rtl && styles.rowReverse]}>
+                          <Text style={[styles.actionName, { color }]} numberOfLines={1}>
+                            {t(label)}
+                          </Text>
+                          {cost !== undefined ? (
+                            <View style={styles.costTag}>
+                              <CoinIcon size={12} />
+                              <Text style={styles.costText}>{cost}</Text>
+                            </View>
+                          ) : null}
+                          {isBluff ? (
+                            <View style={styles.bluffBadge}>
+                              <Text style={styles.bluffText}>{t('bluff')}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <Text style={[styles.actionDesc, rtl && styles.rtlText]} numberOfLines={1}>
+                          {t(desc)}
+                        </Text>
                       </View>
-                    ) : null}
-                  </View>
-                  <Text style={[styles.actionDesc, rtl && styles.rtlText]} numberOfLines={1}>
-                    {t(desc)}
-                  </Text>
-                </View>
-              </Pressy>
-              </Animated.View>
-            );
-          })}
+                    </Pressy>
+                  </Animated.View>
+                );
+              })}
           </Animated.View>
         </ScrollView>
         {sel ? (
@@ -1291,11 +1315,11 @@ export function GameScreen() {
   } else if (iRespond && pending) {
     const isBlockChallenge = g.phase === 'block_challenge';
     const claimer = isBlockChallenge
-      ? g.players.find((p) => p.id === pending.block!.blocker)?.name ?? ''
+      ? (g.players.find((p) => p.id === pending.block!.blocker)?.name ?? '')
       : actorName;
     const claimedRole = isBlockChallenge ? pending.block!.role : pending.claimedRole;
     const actionLabel = t(ACTION_LABEL[pending.action]);
-    const blockRoles = g.phase === 'block' ? BLOCK_ROLES[pending.action] ?? [] : [];
+    const blockRoles = g.phase === 'block' ? (BLOCK_ROLES[pending.action] ?? []) : [];
 
     panel = (
       <Animated.View entering={FadeIn.duration(180)} style={styles.panel}>
@@ -1332,20 +1356,20 @@ export function GameScreen() {
                 entering={ZoomIn.duration(240).delay(bi * 70)}
                 exiting={ZoomOut.duration(150)}
               >
-              <Pressy
-                scaleTo={0.94}
-                disabled={sending}
-                style={[
-                  styles.blockBtn,
-                  { borderColor: roleColors[r], backgroundColor: roleColors[r] + '22' },
-                ]}
-                onPress={() => dispatch({ type: 'block', role: r })}
-              >
-                <RolePortrait role={r} size={26} ring={1.5} />
-                <Text style={[styles.blockBtnText, { color: roleColors[r] }]}>
-                  {t('blockWith', { role: t(r as TKey) })}
-                </Text>
-              </Pressy>
+                <Pressy
+                  scaleTo={0.94}
+                  disabled={sending}
+                  style={[
+                    styles.blockBtn,
+                    { borderColor: roleColors[r], backgroundColor: roleColors[r] + '22' },
+                  ]}
+                  onPress={() => dispatch({ type: 'block', role: r })}
+                >
+                  <RolePortrait role={r} size={26} ring={1.5} />
+                  <Text style={[styles.blockBtnText, { color: roleColors[r] }]}>
+                    {t('blockWith', { role: t(r as TKey) })}
+                  </Text>
+                </Pressy>
               </Animated.View>
             ))
           ) : (
@@ -1361,10 +1385,7 @@ export function GameScreen() {
               </Pressy>
             </Animated.View>
           )}
-          <Animated.View
-            entering={ZoomIn.duration(240).delay(90)}
-            exiting={ZoomOut.duration(150)}
-          >
+          <Animated.View entering={ZoomIn.duration(240).delay(90)} exiting={ZoomOut.duration(150)}>
             <Pressy
               scaleTo={0.94}
               disabled={sending}
@@ -1445,7 +1466,8 @@ export function GameScreen() {
     const owed = responders
       .map((id) => g.players.find((p) => p.id === id)?.name)
       .filter(Boolean) as string[];
-    const who = owed.length === 1 ? owed[0] : owed.length > 1 ? t('several', { n: owed.length }) : '';
+    const who =
+      owed.length === 1 ? owed[0] : owed.length > 1 ? t('several', { n: owed.length }) : '';
     let label: string;
     if (g.phase === 'action' && current) {
       label = t('turnOf', { name: current.name });
@@ -1487,11 +1509,7 @@ export function GameScreen() {
   }
 
   const targetable = (p: PlayerState) =>
-    isMyTurn &&
-    !!selAction &&
-    needsTarget(selAction) &&
-    !selTarget &&
-    isAlive(p);
+    isMyTurn && !!selAction && needsTarget(selAction) && !selTarget && isAlive(p);
 
   const winner = g.winner ? g.players.find((p) => p.id === g.winner) : null;
   const latestLog = g.log.length > 0 ? g.log[g.log.length - 1] : null;
@@ -1516,19 +1534,14 @@ export function GameScreen() {
           <Animated.View
             entering={ZoomIn.duration(220)}
             exiting={ZoomOut.duration(180)}
-            style={[
-              styles.clockChip,
-              secsLeft <= 5 && { borderColor: theme.colors.danger },
-            ]}
+            style={[styles.clockChip, secsLeft <= 5 && { borderColor: theme.colors.danger }]}
           >
             <Ionicons
               name="time-outline"
               size={13}
               color={secsLeft <= 5 ? theme.colors.danger : theme.colors.inkSoft}
             />
-            <Text
-              style={[styles.clockText, secsLeft <= 5 && { color: theme.colors.danger }]}
-            >
+            <Text style={[styles.clockText, secsLeft <= 5 && { color: theme.colors.danger }]}>
               {secsLeft}
             </Text>
           </Animated.View>
@@ -1634,26 +1647,26 @@ export function GameScreen() {
             style={StyleSheet.absoluteFill}
             pointerEvents="box-none"
           >
-          <TableSeat
-            key={p.id}
-            p={p}
-            avatar={avatarOf(p.id)}
-            emote={emotes.get(p.id) ?? null}
-            isTurn={current?.id === p.id && g.phase !== 'game_over'}
-            responding={responders.includes(p.id)}
-            targetable={targetable(p)}
-            anchor={SEAT_ANCHORS[opponents.length][i]}
-            compact={needsMe && g.phase !== 'game_over'}
-            claim={claimOf(p.id)}
-            passed={hasPassed(p.id)}
-            dense={dense}
-            tell={tells[p.id]}
-            onTarget={() => {
-              if (!targetable(p)) return;
-              haptics.selection();
-              setSelTarget(p.id);
-            }}
-          />
+            <TableSeat
+              key={p.id}
+              p={p}
+              avatar={avatarOf(p.id)}
+              emote={emotes.get(p.id) ?? null}
+              isTurn={current?.id === p.id && g.phase !== 'game_over'}
+              responding={responders.includes(p.id)}
+              targetable={targetable(p)}
+              anchor={SEAT_ANCHORS[opponents.length][i]}
+              compact={needsMe && g.phase !== 'game_over'}
+              claim={claimOf(p.id)}
+              passed={hasPassed(p.id)}
+              dense={dense}
+              tell={tells[p.id]}
+              onTarget={() => {
+                if (!targetable(p)) return;
+                haptics.selection();
+                setSelTarget(p.id);
+              }}
+            />
           </Animated.View>
         ))}
         {deals.map((d) => (
@@ -1700,7 +1713,7 @@ export function GameScreen() {
           <FlyingCard
             key={`fly-${fly.key}`}
             from={fly.from}
-            to={{ x: tableBox.w * 0.5 - 17, y: tableBox.h * 0.40 }}
+            to={{ x: tableBox.w * 0.5 - 17, y: tableBox.h * 0.4 }}
           />
         ) : null}
         {/* me, seated at the bottom of the table — my cards face-up so
@@ -1713,7 +1726,7 @@ export function GameScreen() {
           responding={responders.includes(me.id)}
           targetable={false}
           onTarget={() => {}}
-          anchor={{ x: 0.5, y: 0.70 }}
+          anchor={{ x: 0.5, y: 0.7 }}
           anchorBottom={0.05}
           compact={needsMe && g.phase !== 'game_over'}
           claim={claimOf(me.id)}
@@ -1881,7 +1894,12 @@ export function GameScreen() {
       </Modal>
 
       {/* Full history — visual timeline, latest first */}
-      <Modal visible={logOpen} transparent animationType="fade" onRequestClose={() => setLogOpen(false)}>
+      <Modal
+        visible={logOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLogOpen(false)}
+      >
         <View style={styles.logModalBackdrop}>
           <Animated.View entering={ZoomIn.duration(240)} style={styles.logModal}>
             <FlatList
@@ -2290,6 +2308,16 @@ const makeStyles = (theme: Theme) =>
       fontSize: 11,
       fontFamily: font('bold'),
       color: theme.colors.ink,
+    },
+    /** With a claim showing, the name gives way — the role must stay whole. */
+    seatNameShrink: {
+      flexShrink: 1,
+      minWidth: 0,
+    },
+    seatRoleText: {
+      fontSize: 11,
+      fontFamily: font('bold'),
+      flexShrink: 0,
     },
     seatNameChipTurn: {
       backgroundColor: theme.colors.gold,
