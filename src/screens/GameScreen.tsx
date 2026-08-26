@@ -42,6 +42,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Theme, font, latinFont, roleColors, useStyles, useTheme } from '../theme';
 import { Pressy } from '../components/Pressy';
+import { Hourglass } from '../components/Hourglass';
 import { InfluenceCard } from '../components/InfluenceCard';
 import { CoinCount, CoinIcon } from '../components/Coin';
 import { RoleArt } from '../components/RoleArt';
@@ -530,7 +531,7 @@ function TableSeat({
             </View>
           ) : responding ? (
             <View style={styles.respondBadge}>
-              <Ionicons name="hourglass" size={10} color={theme.colors.inkOnGold} />
+              <Hourglass size={10} color={theme.colors.inkOnGold} />
             </View>
           ) : passed ? (
             <Animated.View entering={ZoomIn.duration(220)} style={styles.passedBadge}>
@@ -840,6 +841,14 @@ export function GameScreen() {
     transform: [{ translateX: shake.value }, { translateY: shake.value * 0.4 }],
   }));
   const [banner, setBanner] = useState<{ entry: LogEntry; key: number } | null>(null);
+  /** Owns the banner's dismissal so re-renders can never cancel it. */
+  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    },
+    [],
+  );
   const [notice, setNotice] = useState<SheetMessage | null>(null);
   void lang;
 
@@ -1066,8 +1075,11 @@ export function GameScreen() {
       const bigEvent = BANNER_ALWAYS.has(entry.key);
       if (!denseRef.current || bigEvent) {
         setBanner({ entry, key: logLen });
-        const timer = setTimeout(() => setBanner((b) => (b?.key === logLen ? null : b)), 2100);
-        return () => clearTimeout(timer);
+        if (bannerTimer.current) clearTimeout(bannerTimer.current);
+        bannerTimer.current = setTimeout(
+          () => setBanner((b) => (b?.key === logLen ? null : b)),
+          2100,
+        );
       }
     }
   }, [logLen, g]);
@@ -1493,7 +1505,7 @@ export function GameScreen() {
         style={[styles.panel, styles.panelInline]}
       >
         <View style={[styles.waitRow, rtl && styles.rowReverse]}>
-          <Ionicons name="hourglass-outline" size={15} color={theme.colors.inkSoft} />
+          <Hourglass size={15} color={theme.colors.inkSoft} outline />
           <Text style={styles.waitText}>{label}</Text>
         </View>
       </Animated.View>
