@@ -725,8 +725,7 @@ function DiscardPiles({ g, onPress }: { g: GameState; onPress?: () => void }) {
   const CARD_W = 34;
   const CARD_H = Math.round(CARD_W * 1.42);
   /** Cascade per extra copy: enough of each card shows to be counted at a glance. */
-  const STEP = 11;
-  const FAN_X = 7;
+  const STEP = 14;
   const piles = ROLES.map((r) => ({
     role: r,
     n: g.players.reduce(
@@ -740,25 +739,19 @@ function DiscardPiles({ g, onPress }: { g: GameState; onPress?: () => void }) {
       {piles.map(({ role, n }) => {
         const shown = Math.min(n, 3); // three copies exist of each character
         return (
-          <View
-            key={role}
-            style={{
-              width: CARD_W + (shown - 1) * FAN_X + 6,
-              height: CARD_H + (shown - 1) * STEP + 4,
-            }}
-          >
+          <View key={role} style={{ width: CARD_W, height: CARD_H + (shown - 1) * STEP }}>
             {Array.from({ length: shown }).map((_, i) => (
               <Animated.View
                 key={i}
                 entering={FlipInEasyY.duration(450).delay(i * 60)}
-                style={{
-                  position: 'absolute',
-                  top: i * STEP,
-                  left: 3 + i * FAN_X,
-                  transform: [{ rotate: `${(i - (shown - 1) / 2) * 7}deg` }],
-                }}
+                style={{ position: 'absolute', top: i * STEP }}
               >
                 <InfluenceCard role={role} dead width={CARD_W} />
+                {/* a bright rim separates one card in the stack from the next */}
+                <View
+                  pointerEvents="none"
+                  style={[styles.pileRim, { width: CARD_W, height: CARD_H }]}
+                />
               </Animated.View>
             ))}
           </View>
@@ -1792,16 +1785,10 @@ export function GameScreen() {
               outline
               hold={secsLeft <= 5 ? 700 : 1500}
             />
-            {/* each second slides in as the last one slides out */}
             <View style={styles.clockDigits}>
-              <Animated.Text
-                key={secsLeft}
-                entering={FadeInDown.duration(200).easing(Easing.out(Easing.quad))}
-                exiting={FadeOutUp.duration(180).easing(Easing.in(Easing.quad))}
-                style={[styles.clockText, secsLeft <= 5 && { color: theme.colors.danger }]}
-              >
+              <Text style={[styles.clockText, secsLeft <= 5 && { color: theme.colors.danger }]}>
                 {secsLeft}
-              </Animated.Text>
+              </Text>
             </View>
           </Animated.View>
         ) : null}
@@ -2384,6 +2371,14 @@ const makeStyles = (theme: Theme) =>
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: 12,
+    },
+    pileRim: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: 'rgba(238,241,248,0.55)',
     },
     pilesRow: {
       flexDirection: 'row',
