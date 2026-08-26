@@ -45,6 +45,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Theme, font, latinFont, roleColors, useStyles, useTheme } from '../theme';
+import { skinOf } from '../skins';
 import { Pressy } from '../components/Pressy';
 import { Hourglass } from '../components/Hourglass';
 import { InfluenceCard } from '../components/InfluenceCard';
@@ -168,17 +169,17 @@ function reactionFor(entry: LogEntry, g: GameState): sound.SoundKey | null {
   const role = entry.params?.r as Role | undefined;
   switch (entry.key) {
     case 'logChallengeFailed': // the claim was proven
-      return role ? (sound.ROLE_REACTION[role]?.gloat ?? null) : null;
+      return role ? sound.roleReaction(role, 'gloat') : null;
     case 'logChallengeWon': // the bluff was caught
       return g.pending?.claimedRole
-        ? (sound.ROLE_REACTION[g.pending.claimedRole]?.caught ?? null)
+        ? sound.roleReaction(g.pending.claimedRole, 'caught')
         : null;
     case 'logAssassinateBlocked':
-      return sound.ROLE_REACTION.assassin.blocked;
+      return sound.roleReaction('assassin', 'blocked');
     case 'logStealBlocked':
-      return sound.ROLE_REACTION.captain.blocked;
+      return sound.roleReaction('captain', 'blocked');
     case 'logForeignAidBlocked':
-      return sound.ROLE_REACTION.duke.gloat; // the blocking Duke had the last word
+      return sound.roleReaction('duke', 'gloat'); // the blocking Duke had the last word
     default:
       return null;
   }
@@ -187,11 +188,11 @@ function reactionFor(entry: LogEntry, g: GameState): sound.SoundKey | null {
 /** Which cue a game event plays (null = silent). */
 function logSound(key: string, role?: string): sound.SoundKey | null {
   // A claimed character announces itself in its own voice.
-  if (key === 'logDeclared' && role && sound.ROLE_VOICE[role]) {
-    return sound.ROLE_VOICE[role];
+  if (key === 'logDeclared' && role && sound.roleVoice(role)) {
+    return sound.roleVoice(role);
   }
   if (key === 'logBlockDeclared' && role === 'contessa') {
-    return sound.ROLE_VOICE.contessa;
+    return sound.roleVoice('contessa');
   }
   switch (key) {
     case 'logIncome':
@@ -874,7 +875,8 @@ export function GameScreen() {
   const theme = useTheme();
   const styles = useStyles(makeStyles);
   const { width, height: winH } = useWindowDimensions();
-  const { lang } = useSettings();
+  const { lang, skin: skinId } = useSettings();
+  const skin = skinOf(skinId);
   const { room, myId, move, leave, again, isLocal } = useRoom();
   const [selAction, setSelAction] = useState<ActionType | null>(null);
   const [selTarget, setSelTarget] = useState<string | null>(null);
@@ -1928,15 +1930,18 @@ export function GameScreen() {
             : null,
         ]}
       >
-        <View style={styles.tableRimOuter}>
+        <View style={[styles.tableRimOuter, { backgroundColor: skin.rim }]}>
           <LinearGradient
-            colors={['#6b2a28', '#54201e', '#3d1615']}
+            colors={skin.cloth}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
-            style={styles.felt}
+            style={[styles.felt, { borderColor: skin.clothEdge, backgroundColor: skin.cloth[1] }]}
           >
-            {/* felt inner shade line */}
-            <View style={styles.feltInnerLine} pointerEvents="none" />
+            {/* cloth inner shade line */}
+            <View
+              style={[styles.feltInnerLine, { borderColor: skin.innerLine }]}
+              pointerEvents="none"
+            />
             {/* table center: the Court + reveals + event banner */}
             <View style={styles.tableCenter} pointerEvents="box-none">
               <View style={styles.centerRow}>

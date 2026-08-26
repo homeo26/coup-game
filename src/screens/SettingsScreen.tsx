@@ -11,6 +11,7 @@ import { Pressy } from '../components/Pressy';
 import { useSettings } from '../settings';
 import { t, isRTL, Lang } from '../i18n';
 import * as haptics from '../haptics';
+import { SKINS, SkinId } from '../skins';
 import * as sound from '../sound';
 
 export function SettingsScreen() {
@@ -139,6 +140,40 @@ export function SettingsScreen() {
           </View>
         </View>
 
+        {/* Table skin */}
+        <View style={styles.card}>
+          <View style={[styles.row, rtl && styles.rowReverse]}>
+            <Ionicons name="grid-outline" size={20} color={theme.colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowTitle, rtlText]}>{t('tableSkinSetting')}</Text>
+              <Text style={[styles.rowDesc, rtlText]}>{t('tableSkinDesc')}</Text>
+            </View>
+          </View>
+          <View style={[styles.segment, rtl && styles.rowReverse]}>
+            {(Object.keys(SKINS) as SkinId[]).map((id) => {
+              const active = settings.skin === id;
+              const sk = SKINS[id];
+              return (
+                <Pressy
+                  key={id}
+                  scaleTo={0.95}
+                  style={[styles.segmentBtn, active && styles.segmentActive]}
+                  onPress={() => {
+                    haptics.selection();
+                    sound.play('select');
+                    settings.set('skin', id);
+                  }}
+                >
+                  <View style={[styles.skinSwatch, { backgroundColor: sk.cloth[1], borderColor: sk.rim }]} />
+                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                    {t(sk.nameKey)}
+                  </Text>
+                </Pressy>
+              );
+            })}
+          </View>
+        </View>
+
         {/* Turn clock (offline games; online is set by the host in the lobby) */}
         <View style={styles.card}>
           <View style={[styles.row, rtl && styles.rowReverse]}>
@@ -261,8 +296,17 @@ const makeStyles = (theme: Theme) =>
       flex: 1,
       height: 42,
       borderRadius: theme.radius.sm,
+      flexDirection: 'row',
+      gap: 7,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    /** A pinch of the actual cloth, so the choice is visible not just named. */
+    skinSwatch: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      borderWidth: 2,
     },
     segmentActive: {
       backgroundColor: theme.colors.gold,

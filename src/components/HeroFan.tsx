@@ -17,7 +17,7 @@ import Animated, {
 import { InfluenceCard } from './InfluenceCard';
 import { Pressy } from './Pressy';
 import { Role, ROLES } from '../engine/types';
-import { ROLE_VOICE, play } from '../sound';
+import { play, roleVoice } from '../sound';
 import * as haptics from '../haptics';
 
 const CARD_W = 88;
@@ -89,7 +89,7 @@ export function HeroFan() {
           lifted={lifted === r}
           onPress={() => {
             haptics.selection();
-            play(ROLE_VOICE[r] ?? 'card');
+            play(roleVoice(r) ?? 'card');
             setLifted(r);
             setTimeout(() => setLifted((cur) => (cur === r ? null : cur)), 1400);
           }}

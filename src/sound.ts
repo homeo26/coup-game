@@ -7,6 +7,7 @@
  * lazily on first play and reused (seekTo(0) restarts overlapping cues).
  */
 import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { getLang } from './i18n';
 import { getSettings } from './settings';
 
 const SOURCES = {
@@ -57,10 +58,31 @@ const SOURCES = {
   voiceContessaGloat: require('../assets/sounds/roles/contessa-gloat.m4a'),
   voiceContessaCaught: require('../assets/sounds/roles/contessa-caught.m4a'),
   voiceContessaBlocked: require('../assets/sounds/roles/contessa-blocked.m4a'),
+  // the same cast in Arabic (scripts/gen-voices.sh, Arabic pass)
+  voiceDukeAr: require('../assets/sounds/roles/duke-ar.m4a'),
+  voiceAssassinAr: require('../assets/sounds/roles/assassin-ar.m4a'),
+  voiceCaptainAr: require('../assets/sounds/roles/captain-ar.m4a'),
+  voiceAmbassadorAr: require('../assets/sounds/roles/ambassador-ar.m4a'),
+  voiceContessaAr: require('../assets/sounds/roles/contessa-ar.m4a'),
+  voiceDukeGloatAr: require('../assets/sounds/roles/duke-gloat-ar.m4a'),
+  voiceDukeCaughtAr: require('../assets/sounds/roles/duke-caught-ar.m4a'),
+  voiceDukeBlockedAr: require('../assets/sounds/roles/duke-blocked-ar.m4a'),
+  voiceAssassinGloatAr: require('../assets/sounds/roles/assassin-gloat-ar.m4a'),
+  voiceAssassinCaughtAr: require('../assets/sounds/roles/assassin-caught-ar.m4a'),
+  voiceAssassinBlockedAr: require('../assets/sounds/roles/assassin-blocked-ar.m4a'),
+  voiceCaptainGloatAr: require('../assets/sounds/roles/captain-gloat-ar.m4a'),
+  voiceCaptainCaughtAr: require('../assets/sounds/roles/captain-caught-ar.m4a'),
+  voiceCaptainBlockedAr: require('../assets/sounds/roles/captain-blocked-ar.m4a'),
+  voiceAmbassadorGloatAr: require('../assets/sounds/roles/ambassador-gloat-ar.m4a'),
+  voiceAmbassadorCaughtAr: require('../assets/sounds/roles/ambassador-caught-ar.m4a'),
+  voiceAmbassadorBlockedAr: require('../assets/sounds/roles/ambassador-blocked-ar.m4a'),
+  voiceContessaGloatAr: require('../assets/sounds/roles/contessa-gloat-ar.m4a'),
+  voiceContessaCaughtAr: require('../assets/sounds/roles/contessa-caught-ar.m4a'),
+  voiceContessaBlockedAr: require('../assets/sounds/roles/contessa-blocked-ar.m4a'),
 } as const;
 
 /** Voice stinger for a claimed character, if we have one. */
-export const ROLE_VOICE: Record<string, SoundKey> = {
+const ROLE_VOICE_EN: Record<string, SoundKey> = {
   duke: 'voiceDuke',
   assassin: 'voiceAssassin',
   captain: 'voiceCaptain',
@@ -69,7 +91,7 @@ export const ROLE_VOICE: Record<string, SoundKey> = {
 };
 
 /** Reaction barks per character: proven claim, caught bluff, blocked action. */
-export const ROLE_REACTION: Record<string, Record<'gloat' | 'caught' | 'blocked', SoundKey>> = {
+const ROLE_REACTION_EN: Record<string, Record<ReactionKind, SoundKey>> = {
   duke: { gloat: 'voiceDukeGloat', caught: 'voiceDukeCaught', blocked: 'voiceDukeBlocked' },
   assassin: {
     gloat: 'voiceAssassinGloat',
@@ -92,6 +114,38 @@ export const ROLE_REACTION: Record<string, Record<'gloat' | 'caught' | 'blocked'
     blocked: 'voiceContessaBlocked',
   },
 };
+
+const ROLE_VOICE_AR: Record<string, SoundKey> = {
+  duke: 'voiceDukeAr',
+  assassin: 'voiceAssassinAr',
+  captain: 'voiceCaptainAr',
+  ambassador: 'voiceAmbassadorAr',
+  contessa: 'voiceContessaAr',
+};
+
+const ROLE_REACTION_AR: Record<string, Record<ReactionKind, SoundKey>> = {
+  duke: { gloat: 'voiceDukeGloatAr', caught: 'voiceDukeCaughtAr', blocked: 'voiceDukeBlockedAr' },
+  assassin: { gloat: 'voiceAssassinGloatAr', caught: 'voiceAssassinCaughtAr', blocked: 'voiceAssassinBlockedAr' },
+  captain: { gloat: 'voiceCaptainGloatAr', caught: 'voiceCaptainCaughtAr', blocked: 'voiceCaptainBlockedAr' },
+  ambassador: { gloat: 'voiceAmbassadorGloatAr', caught: 'voiceAmbassadorCaughtAr', blocked: 'voiceAmbassadorBlockedAr' },
+  contessa: { gloat: 'voiceContessaGloatAr', caught: 'voiceContessaCaughtAr', blocked: 'voiceContessaBlockedAr' },
+};
+
+export type ReactionKind = 'gloat' | 'caught' | 'blocked';
+
+/**
+ * The characters speak the player's language. Arabic has its own recordings;
+ * anything else falls back to the English cast.
+ */
+export function roleVoice(role: string): SoundKey | null {
+  const table = getLang() === 'ar' ? ROLE_VOICE_AR : ROLE_VOICE_EN;
+  return table[role] ?? null;
+}
+
+export function roleReaction(role: string, kind: ReactionKind): SoundKey | null {
+  const table = getLang() === 'ar' ? ROLE_REACTION_AR : ROLE_REACTION_EN;
+  return table[role]?.[kind] ?? null;
+}
 
 export type SoundKey = keyof typeof SOURCES;
 

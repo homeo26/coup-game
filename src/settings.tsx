@@ -16,6 +16,8 @@ export interface Settings {
   tells: boolean;
   /** Seconds each decision gets in an offline game (0 = no clock). */
   turnTimer: number;
+  /** Which table the game is played on (src/skins.ts). */
+  skin: string;
   /** Character portrait used as the player's avatar. */
   avatar: string;
   playerName: string;
@@ -30,6 +32,7 @@ const DEFAULTS: Settings = {
   music: true,
   tells: false,
   turnTimer: 30,
+  skin: 'felt',
   avatar: ANIMALS[Math.floor(Math.random() * ANIMALS.length)],
   playerName: '',
 };

@@ -170,7 +170,7 @@ export const dict = {
     ar: 'أجاب {done} من {total} · بانتظار {who}',
   },
   tallyPlayers: { en: '{n} players', ar: '{n} لاعبين' },
-  tallyYou: { en: 'you', ar: 'عليك' },
+  tallyYou: { en: 'you', ar: 'دورك' },
   waitChallenge: {
     en: '{who} deciding whether to challenge {name}’s {role}…',
     ar: '{who} يقرر إن كان سيتحدى {role} لـ{name}…',
@@ -373,6 +373,13 @@ export const dict = {
   optLetItDesc: { en: 'The {action} goes through.', ar: 'يمضي {action}.' },
   optAcceptBlockTitle: { en: 'Accept the block', ar: 'اقبل الصدّ' },
   optAcceptBlockDesc: { en: 'The {action} is stopped.', ar: 'يتوقف {action}.' },
+  tableSkinSetting: { en: 'Table', ar: 'الطاولة' },
+  tableSkinDesc: {
+    en: 'What the table is made of — cloth and rim only',
+    ar: 'مما تُصنع الطاولة — القماش والحافة فقط',
+  },
+  skinFelt: { en: 'Card room', ar: 'صالة الورق' },
+  skinMajlis: { en: 'Majlis', ar: 'مجلس' },
   turnTimerSetting: { en: 'Turn clock', ar: 'مؤقت الدور' },
   turnTimerDesc: {
     en: 'Time limit per decision in offline games — online, the host sets it',

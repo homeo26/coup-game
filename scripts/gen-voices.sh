@@ -72,3 +72,85 @@ react contessa   Samantha 172 "The Contessa is never questioned."   "I had no Co
 
 rm -rf "$TMP2"
 echo "reaction barks regenerated"
+
+# ---------------------------------------------------------------------------
+# Arabic delivery.
+#
+# macOS ships exactly one Arabic voice on most installs (Majed), and `say`
+# does NOT fail for an unknown name — it quietly renders with the default
+# English voice, which produces a near-empty file for Arabic text. So each
+# candidate is probed for real output before it is used, and the cast falls
+# back to whatever Arabic voice does exist. Install more Arabic voices
+# (System Settings › Accessibility › Spoken Content › Manage Voices) and
+# re-run: the extra voices are picked up automatically.
+# ---------------------------------------------------------------------------
+TMP3=$(mktemp -d)
+AR_PROBE="الدوق يأخذ ثلاث عملات"
+
+speaks_arabic() { # voice -> 0 when it renders real Arabic audio
+  local v=$1 out="$TMP3/probe-$v.aiff"
+  say -v "$v" -o "$out" "$AR_PROBE" >/dev/null 2>&1 || return 1
+  # an English voice handed Arabic text emits a few KB of nothing
+  [ "$(stat -f%z "$out")" -gt 40000 ]
+}
+
+# preference order per character; the first that really speaks Arabic wins
+pick_ar_voice() {
+  for v in "$@"; do
+    if speaks_arabic "$v"; then echo "$v"; return; fi
+  done
+  echo ""
+}
+
+AR_DUKE=$(pick_ar_voice Maged Majed)
+AR_CAPTAIN=$(pick_ar_voice Tarik Salim Majed Maged)
+AR_AMBASSADOR=$(pick_ar_voice Amira Majed Maged)
+AR_ASSASSIN=$(pick_ar_voice Laila Nada Majed Maged)
+AR_CONTESSA=$(pick_ar_voice Hala Majed Maged)
+
+if [ -z "$AR_DUKE" ]; then
+  echo "  !! no Arabic voice installed — skipping the Arabic lines"
+else
+  echo "  Arabic cast: duke=$AR_DUKE captain=$AR_CAPTAIN ambassador=$AR_AMBASSADOR assassin=$AR_ASSASSIN contessa=$AR_CONTESSA"
+  ar_line() { # role voice rate text
+    local role=$1 voice=$2 rate=$3 text=$4
+    say -v "$voice" -r "$rate" -o "$TMP3/$role.aiff" "$text"
+    ffmpeg -y -loglevel error -i "$TMP3/$role.aiff" \
+      -af "$TRIM,loudnorm=I=-17:TP=-1.5" \
+      -ac 1 -ar 44100 -c:a aac -b:a 96k "assets/sounds/roles/$role-ar.m4a"
+  }
+
+  # Rate is the only differentiation applied when one voice plays every part:
+  # it is how a person speaks, not a filter on their voice.
+  ar_line duke       "$AR_DUKE"       165 "الدوق يأخذ ثلاث عملات"
+  ar_line captain    "$AR_CAPTAIN"    185 "القبطان يسرق عملتين"
+  ar_line ambassador "$AR_AMBASSADOR" 175 "السفير يبادل مع البلاط"
+  ar_line assassin   "$AR_ASSASSIN"   158 "القاتل يضرب، اخسر نفوذًا"
+  ar_line contessa   "$AR_CONTESSA"   180 "الكونتيسة تمنع الاغتيال"
+
+  ar_react() { # role voice rate gloat caught blocked
+    local role=$1 voice=$2 rate=$3 gloat=$4 caught=$5 blocked=$6
+    local kind text
+    for kind in gloat caught blocked; do
+      case $kind in
+        gloat) text=$gloat ;;
+        caught) text=$caught ;;
+        blocked) text=$blocked ;;
+      esac
+      say -v "$voice" -r "$rate" -o "$TMP3/$role-$kind.aiff" "$text"
+      ffmpeg -y -loglevel error -i "$TMP3/$role-$kind.aiff" \
+        -af "$TRIM,loudnorm=I=-17:TP=-1.5" \
+        -ac 1 -ar 44100 -c:a aac -b:a 96k "assets/sounds/roles/$role-$kind-ar.m4a"
+    done
+    echo "    $role reactions (ar)"
+  }
+
+  ar_react duke       "$AR_DUKE"       165 "الدوق لا يخادع" "مبالغة يُؤسف لها" "الخزينة مغلقة أمامي"
+  ar_react captain    "$AR_CAPTAIN"    185 "قلت لك، القبطان" "حسنًا، أمسكت بي" "يداي فارغتان"
+  ar_react ambassador "$AR_AMBASSADOR" 175 "السفير يحفظ كلمته" "سوء فهم، حقًا" "البلاط مغلق اليوم"
+  ar_react assassin   "$AR_ASSASSIN"   158 "كان النصل حقيقيًا" "لا نصل، ليس هذه المرة" "الكونتيسة أنقذتك"
+  ar_react contessa   "$AR_CONTESSA"   180 "الكونتيسة لا تُسأل" "لم تكن لديّ كونتيسة" "فليكن"
+fi
+
+rm -rf "$TMP3"
+echo "Arabic lines regenerated"
