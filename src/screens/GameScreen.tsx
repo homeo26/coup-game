@@ -534,9 +534,7 @@ function TableSeat({
               <Hourglass size={10} color={theme.colors.inkOnGold} />
             </View>
           ) : passed ? (
-            <Animated.View entering={ZoomIn.duration(220)} style={styles.passedBadge}>
-              <Ionicons name="checkmark" size={11} color="#0d1a12" />
-            </Animated.View>
+            <PassTick />
           ) : null}
         </Animated.View>
         <Animated.View
@@ -593,6 +591,34 @@ function TableSeat({
           <Text style={styles.emoteBubbleText}>{emote}</Text>
         </Animated.View>
       ) : null}
+    </Animated.View>
+  );
+}
+
+/**
+ * PassTick — "answered, and standing aside".
+ *
+ * A dark token with a thin green check, ringed once by a halo that expands
+ * and fades. One shot: it marks the moment the answer landed and then sits
+ * still like the rest of the table.
+ */
+function PassTick() {
+  const styles = useStyles(makeStyles);
+  const theme = useTheme();
+  const ping = useSharedValue(0);
+  useEffect(() => {
+    ping.value = withTiming(1, { duration: 560, easing: Easing.out(Easing.cubic) });
+  }, [ping]);
+  const haloStyle = useAnimatedStyle(() => ({
+    opacity: (1 - ping.value) * 0.6,
+    transform: [{ scale: 0.85 + ping.value * 1.15 }],
+  }));
+  return (
+    <Animated.View entering={ZoomIn.duration(220)} style={styles.passedBadgeWrap}>
+      <Animated.View pointerEvents="none" style={[styles.passedHalo, haloStyle]} />
+      <View style={styles.passedBadge}>
+        <Ionicons name="checkmark-sharp" size={12} color={theme.colors.success} />
+      </View>
     </Animated.View>
   );
 }
@@ -1309,6 +1335,10 @@ export function GameScreen() {
     const claimedRole = isBlockChallenge ? pending.block!.role : pending.claimedRole;
     const actionLabel = t(ACTION_LABEL[pending.action]);
     const blockRoles = g.phase === 'block' ? BLOCK_ROLES[pending.action] ?? [] : [];
+    const canStillBlock =
+      g.phase === 'action_challenge' &&
+      (BLOCK_ROLES[pending.action] ?? []).length > 0 &&
+      (pending.action === 'foreign_aid' || pending.target === me.id);
 
     panel = (
       <Animated.View entering={FadeIn.duration(180)} style={styles.panel}>
@@ -1337,54 +1367,105 @@ export function GameScreen() {
               g.players.filter((p) => isAlive(p) && hasPassed(p.id)).length + responders.length,
           })}
         </Text>
-        <View style={[styles.btnRow, rtl && styles.rowReverse]}>
-          {g.phase === 'block' ? (
-            blockRoles.map((r, bi) => (
-              <Animated.View
-                key={r}
-                entering={ZoomIn.duration(240).delay(bi * 70)}
-                exiting={ZoomOut.duration(150)}
-              >
+        <Text style={[styles.respHint, rtl && styles.rtlText]}>
+          {g.phase === 'block'
+            ? t('hintBlockWindow')
+            : isBlockChallenge
+              ? t('hintBlockChallengeWindow')
+              : t('hintChallengeWindow')}
+        </Text>
+        <View style={styles.respOpts}>
+          {/* Blocking IS a claim of your own — say so on the button. */}
+          {blockRoles.map((r, bi) => (
+            <Animated.View
+              key={r}
+              entering={FadeInDown.duration(220).delay(bi * 60)}
+              exiting={FadeOut.duration(140)}
+            >
               <Pressy
-                scaleTo={0.94}
+                scaleTo={0.97}
                 disabled={sending}
                 style={[
-                  styles.blockBtn,
-                  { borderColor: roleColors[r], backgroundColor: roleColors[r] + '22' },
+                  styles.respOpt,
+                  { borderColor: roleColors[r], backgroundColor: roleColors[r] + '1c' },
+                  rtl && styles.rowReverse,
                 ]}
                 onPress={() => dispatch({ type: 'block', role: r })}
               >
-                <RolePortrait role={r} size={26} ring={1.5} />
-                <Text style={[styles.blockBtnText, { color: roleColors[r] }]}>
-                  {t('blockWith', { role: t(r as TKey) })}
-                </Text>
-              </Pressy>
-              </Animated.View>
-            ))
-          ) : (
-            <Animated.View entering={ZoomIn.duration(240)} exiting={ZoomOut.duration(150)}>
-              <Pressy
-                scaleTo={0.94}
-                disabled={sending}
-                style={styles.challengeBtn}
-                onPress={() => dispatch({ type: 'challenge' })}
-              >
-                <Ionicons name="flash" size={17} color="#fff" />
-                <Text style={styles.challengeBtnText}>{t('challenge')}</Text>
+                <RolePortrait role={r} size={30} ring={1.5} />
+                <View style={styles.respOptBody}>
+                  <Text style={[styles.respOptTitle, { color: roleColors[r] }, rtl && styles.rtlText]}>
+                    {t('optClaimTitle', { role: t(r as TKey) })}
+                  </Text>
+                  <Text style={[styles.respOptDesc, rtl && styles.rtlText]}>
+                    {t('optClaimDesc', { action: actionLabel, name: actorName })}
+                  </Text>
+                </View>
               </Pressy>
             </Animated.View>
-          )}
+          ))}
+          {g.phase !== 'block' ? (
+            <Animated.View entering={FadeInDown.duration(220)} exiting={FadeOut.duration(140)}>
+              <Pressy
+                scaleTo={0.97}
+                disabled={sending}
+                style={[styles.respOpt, styles.respOptDanger, rtl && styles.rowReverse]}
+                onPress={() => dispatch({ type: 'challenge' })}
+              >
+                <View style={styles.respOptIcon}>
+                  <Ionicons name="flash" size={17} color={theme.colors.danger} />
+                </View>
+                <View style={styles.respOptBody}>
+                  <Text
+                    style={[
+                      styles.respOptTitle,
+                      { color: theme.colors.danger },
+                      rtl && styles.rtlText,
+                    ]}
+                  >
+                    {t('optChallengeTitle')}
+                  </Text>
+                  <Text style={[styles.respOptDesc, rtl && styles.rtlText]}>
+                    {t('optChallengeDesc', {
+                      name: claimer,
+                      role: t((claimedRole ?? 'duke') as TKey),
+                    })}
+                  </Text>
+                </View>
+              </Pressy>
+            </Animated.View>
+          ) : null}
           <Animated.View
-            entering={ZoomIn.duration(240).delay(90)}
-            exiting={ZoomOut.duration(150)}
+            entering={FadeInDown.duration(220).delay(80)}
+            exiting={FadeOut.duration(140)}
           >
             <Pressy
-              scaleTo={0.94}
+              scaleTo={0.97}
               disabled={sending}
-              style={styles.neutralBtn}
+              style={[styles.respOpt, rtl && styles.rowReverse]}
               onPress={() => dispatch({ type: 'pass' })}
             >
-              <Text style={styles.neutralBtnText}>{t('allow')}</Text>
+              <View style={styles.respOptIcon}>
+                <Ionicons name="hand-left-outline" size={17} color={theme.colors.inkSoft} />
+              </View>
+              <View style={styles.respOptBody}>
+                <Text style={[styles.respOptTitle, rtl && styles.rtlText]}>
+                  {g.phase === 'block'
+                    ? t('optLetItTitle')
+                    : isBlockChallenge
+                      ? t('optAcceptBlockTitle')
+                      : t('optNoChallengeTitle')}
+                </Text>
+                <Text style={[styles.respOptDesc, rtl && styles.rtlText]}>
+                  {g.phase === 'block'
+                    ? t('optLetItDesc', { action: actionLabel })
+                    : isBlockChallenge
+                      ? t('optAcceptBlockDesc', { action: actionLabel })
+                      : canStillBlock
+                        ? t('optNoChallengeDescBlock')
+                        : t('optNoChallengeDesc', { action: actionLabel })}
+                </Text>
+              </View>
             </Pressy>
           </Animated.View>
         </View>
@@ -2246,14 +2327,30 @@ const makeStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    passedBadge: {
+    passedBadgeWrap: {
       position: 'absolute',
-      top: -3,
-      right: -3,
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      backgroundColor: theme.colors.success,
+      top: -4,
+      right: -4,
+      width: 21,
+      height: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    passedHalo: {
+      position: 'absolute',
+      width: 21,
+      height: 21,
+      borderRadius: 11,
+      borderWidth: 1.5,
+      borderColor: theme.colors.success,
+    },
+    passedBadge: {
+      width: 21,
+      height: 21,
+      borderRadius: 11,
+      backgroundColor: 'rgba(8,10,14,0.94)',
+      borderWidth: 1.2,
+      borderColor: theme.colors.success + 'cc',
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -2516,13 +2613,13 @@ const makeStyles = (theme: Theme) =>
       borderColor: theme.colors.border,
     },
     panelTitle: {
-      fontSize: 14,
+      fontSize: 15,
       fontFamily: font('bold'),
       color: theme.colors.ink,
       textAlign: 'center',
     },
     panelSub: {
-      fontSize: 12,
+      fontSize: 13,
       fontFamily: font('semibold'),
       color: theme.colors.inkSoft,
       textAlign: 'center',
@@ -2551,14 +2648,14 @@ const makeStyles = (theme: Theme) =>
       gap: 8,
     },
     actionName: {
-      fontSize: 13.5,
+      fontSize: 15,
       fontFamily: font('bold'),
     },
     actionDesc: {
-      fontSize: 11,
+      fontSize: 13,
       fontFamily: font('semibold'),
       color: theme.colors.inkSoft,
-      marginTop: -1,
+      marginTop: 0,
     },
     bluffBadge: {
       backgroundColor: 'rgba(232, 163, 61, 0.16)',
@@ -2694,8 +2791,57 @@ const makeStyles = (theme: Theme) =>
       gap: 8,
       justifyContent: 'center',
     },
+    respHint: {
+      fontSize: 13,
+      fontFamily: font('semibold'),
+      color: theme.colors.inkSoft,
+      textAlign: 'center',
+      marginBottom: 2,
+    },
+    respOpts: {
+      gap: 8,
+      width: '100%',
+    },
+    respOpt: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 11,
+      paddingVertical: 11,
+      paddingHorizontal: 13,
+      borderRadius: theme.radius.md,
+      borderWidth: 1.5,
+      borderColor: 'rgba(255,255,255,0.14)',
+      backgroundColor: 'rgba(22,25,32,0.92)',
+    },
+    respOptDanger: {
+      borderColor: theme.colors.danger + '88',
+      backgroundColor: theme.colors.danger + '18',
+    },
+    respOptIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.06)',
+    },
+    respOptBody: {
+      flex: 1,
+      gap: 1,
+    },
+    respOptTitle: {
+      fontSize: 15,
+      fontFamily: font('bold'),
+      color: theme.colors.ink,
+    },
+    respOptDesc: {
+      fontSize: 13,
+      lineHeight: 18,
+      fontFamily: font('regular'),
+      color: theme.colors.inkSoft,
+    },
     tallyText: {
-      fontSize: 11.5,
+      fontSize: 12.5,
       fontFamily: font('semibold'),
       color: theme.colors.inkFaint,
       textAlign: 'center',

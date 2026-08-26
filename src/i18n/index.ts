@@ -322,6 +322,39 @@ export const dict = {
   audioSection: { en: 'Audio', ar: 'الصوت' },
   playSection: { en: 'Play', ar: 'اللعب' },
   tellsSetting: { en: 'Bot tells', ar: 'أمارات الروبوتات' },
+  // Response windows: what each choice actually commits you to
+  hintChallengeWindow: {
+    en: 'Anyone may challenge the claim. Blocking comes after.',
+    ar: 'يمكن لأي لاعب تحدّي الادعاء. أما الصدّ فيأتي بعده.',
+  },
+  hintBlockWindow: {
+    en: 'To stop this you must claim a character yourself.',
+    ar: 'لإيقاف هذا عليك أن تدّعي شخصية بنفسك.',
+  },
+  hintBlockChallengeWindow: {
+    en: 'The block is a claim too — challenge it or accept it.',
+    ar: 'الصدّ ادعاء أيضًا — تحدّه أو اقبله.',
+  },
+  optChallengeTitle: { en: 'Challenge the claim', ar: 'تحدَّ الادعاء' },
+  optChallengeDesc: {
+    en: 'You say {name} has no {role}. If they do, you lose a card.',
+    ar: 'تقول إن {name} لا يملك {role}. فإن كان يملكها تفقد بطاقة.',
+  },
+  optClaimTitle: { en: 'Claim {role} to block', ar: 'ادّعِ {role} للصدّ' },
+  optClaimDesc: {
+    en: 'Stops the {action} — {name} may challenge your claim.',
+    ar: 'يوقف {action} — ويمكن لـ {name} تحدّي ادعائك.',
+  },
+  optNoChallengeTitle: { en: 'Believe them', ar: 'صدّقهم' },
+  optNoChallengeDesc: { en: 'The {action} goes through.', ar: 'يمضي {action}.' },
+  optNoChallengeDescBlock: {
+    en: 'You will still get the chance to block.',
+    ar: 'ستبقى لديك فرصة الصدّ بعد ذلك.',
+  },
+  optLetItTitle: { en: "Don't block", ar: 'لا تصدّ' },
+  optLetItDesc: { en: 'The {action} goes through.', ar: 'يمضي {action}.' },
+  optAcceptBlockTitle: { en: 'Accept the block', ar: 'اقبل الصدّ' },
+  optAcceptBlockDesc: { en: 'The {action} is stopped.', ar: 'يتوقف {action}.' },
   turnTimerSetting: { en: 'Turn clock', ar: 'مؤقت الدور' },
   turnTimerDesc: {
     en: 'Time limit per decision in offline games — online, the host sets it',
