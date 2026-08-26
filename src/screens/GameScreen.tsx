@@ -380,6 +380,9 @@ function TableSeat({
         : 44;
   const COIN = dense ? 13 : compact ? 14 : 18; // coin glyph size
 
+  /** The name chip turns silver on the active seat: dark ink, not white. */
+  const onSilver = isTurn && !claim;
+
   // The tell: a small, quick shiver — noticeable if you are watching for it
   const shiver = useSharedValue(0);
   const lastTell = useRef(tell ?? 0);
@@ -539,7 +542,7 @@ function TableSeat({
           layout={LinearTransition.duration(220)}
           style={[
             styles.seatNameChip,
-            isTurn && !claim && styles.seatNameChipTurn,
+            onSilver && styles.seatNameChipTurn,
             claim && { borderColor: roleColors[claim], backgroundColor: 'rgba(6,8,12,0.96)' },
             dead && { opacity: 0.6 },
           ]}
@@ -552,7 +555,7 @@ function TableSeat({
           <Text
             style={[
               styles.seatNameText,
-              isTurn && !claim && styles.seatNameTextTurn,
+              onSilver && styles.seatNameTextTurn,
               claim && { color: roleColors[claim] },
             ]}
             numberOfLines={1}
@@ -561,9 +564,13 @@ function TableSeat({
           </Text>
           {dense && !dead ? (
             <>
-              <View style={styles.chipDivider} />
-              <CoinIcon size={12} />
-              <Text style={styles.chipCoins}>{p.coins}</Text>
+              <View style={[styles.chipDivider, onSilver && styles.chipDividerOnSilver]} />
+              <View style={[styles.chipCoinDisc, onSilver && styles.chipCoinDiscOnSilver]}>
+                <CoinIcon size={12} />
+              </View>
+              <Text style={[styles.chipCoins, onSilver && styles.chipCoinsOnSilver]}>
+                {p.coins}
+              </Text>
             </>
           ) : null}
         </Animated.View>
@@ -2248,9 +2255,24 @@ const makeStyles = (theme: Theme) =>
       marginHorizontal: 1,
     },
     chipCoins: {
-      fontSize: 11,
+      fontSize: 11.5,
       fontFamily: latinFont('bold'),
-      color: '#ffffff',
+      color: theme.colors.goldLight,
+    },
+    chipCoinsOnSilver: {
+      color: theme.colors.inkOnGold,
+    },
+    chipCoinDisc: {
+      borderRadius: 9,
+      padding: 1,
+    },
+    chipCoinDiscOnSilver: {
+      backgroundColor: 'rgba(8,10,14,0.92)',
+      borderWidth: 0.5,
+      borderColor: 'rgba(255,255,255,0.22)',
+    },
+    chipDividerOnSilver: {
+      backgroundColor: 'rgba(8,10,14,0.32)',
     },
     seatNameChip: {
       flexDirection: 'row',
