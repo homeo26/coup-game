@@ -56,6 +56,33 @@ no server-side garbage collector needed.
 same engine runs in-memory and a shared bot policy (`src/ai.ts`) gives
 each bot a personality: they hold grudges, gang up on the leader, bluff,
 count the cards they can see, and take a moment to think before acting.
+The bots are a named cast (`src/personas.ts`) — Rami hoards then coups the
+leader, Layla bluffs on a coin flip, Nabil challenges too much, Hind holds
+grudges, Sami plays quietly — each with a fixed avatar and a dossier you
+can read before you sit down. Offline tables can run a turn clock too
+(Settings › Play), and *Bot tells* (off by default) makes a bluffing bot
+give a small sign.
+
+**Every choice says what it costs you**: the action sheet reads in coins
+and icons rather than paragraphs (`+3`, `−7`, a target pip), and a response
+window spells out what you are committing to — *Challenge* carries "1 card"
+if you are wrong, *Claim Captain to block* says the actor may challenge you
+back, and passing is labelled for its window ("Believe them", "Don't
+block", "Accept the block").
+
+**Voices in both languages**: the five characters announce their own
+actions and react to how a claim resolved — gloating when it was proven,
+owning up when the bluff was caught — in English or Arabic, following the
+app's language.
+
+**A card to send afterwards**: the results screen is a shareable image —
+winner, finish order with coins collected, and the game's highlights
+(bluffs called, coins stolen, times caught) — rasterised and handed to the
+OS share sheet.
+
+**Table skins**: the table's surface (`src/skins.ts`) can be the crimson
+card room or a majlis — an oxblood carpet in a brass frame. Surface only:
+a skin never touches a card, a seat or a rule.
 
 **At the table**: everyone sits around a felt table — animal avatar,
 coins, and a card fan; your own two cards face up in front of you. Dead

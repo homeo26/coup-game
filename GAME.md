@@ -29,6 +29,7 @@ challenge the claim. Bluffs that survive unchallenged simply work.
 1. Shuffle all 15 cards; deal 2 to each player (kept secret, owner may
    look anytime). Remainder becomes the Court deck.
 2. Each player starts with **2 coins**. Coin counts are public.
+   *Two-player game*: the starting player receives only **1 coin**.
 3. First player: winner of the previous game (digital version: seat 0).
    Turns proceed in seating order, skipping eliminated players.
 
@@ -134,8 +135,18 @@ phase: 'action' | 'action_challenge' | 'block' | 'block_challenge'
 pending: { action, actor, target?, claimedRole?, block?{blocker, role},
            passed[], drawn?, resume? } | null
 lossQueue: [{playerId}] // ordered pending influence losses
-winner, log[], version
+timerSec, deadlineMs    // turn clock (0 = off)
+stats: {                // per player id, for the end-of-game recap
+  coinsGained, stolen, biggestSteal, bluffsCalled,
+  challengesLost, caughtBluffing, blocks, kills
+}
+winner, eliminated[], log[], version
 ```
+
+`stats` is accumulated by the reducer rather than derived from `log`,
+because the log is capped at `LOG_CAP` (80) entries and a long game would
+lose its early events. It is additive: a state saved before it existed
+gets an empty object and fills in from the next move onwards.
 
 Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
 `lose(cardIndex)`, `exchange_keep(indexes)`, `forfeit`.
@@ -204,7 +215,11 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
   resolves the wait in the least damaging way: the turn holder takes
   Income (or the forced Coup at 10+), pending responders all pass, a card
   loss reveals the first card, an exchange keeps the current hand.
-- Clients show a countdown chip in the header, red under 5 seconds.
+- Clients show a countdown chip in the header, red under 5 seconds, whose
+  hourglass stops turning once the clock reaches zero.
+- Offline tables read the clock from Settings › Play (off / 30s / 60s,
+  default 30s) instead of a host lobby choice, and `newGame` arms the
+  first deadline at the deal so the opening decision is also on the clock.
 
 ### Deep links
 
@@ -226,6 +241,31 @@ Moves: `declare(action, target?)`, `pass`, `challenge`, `block(role)`,
 - A driver effect lets one bot act per state change (short human-ish
   delay); the local game is presented through the same `Room` shape so
   the entire game UI is reused unchanged (room code shows `BOTS`).
+- The offline cast is fixed (`src/personas.ts`): each bot id maps to a
+  name, an avatar and a dossier line that matches the traits `src/ai.ts`
+  already derives from that id, so what a player reads before the game is
+  what the bot does in it.
+- *Bot tells* (Settings › Play, off by default) shivers a bot's seat when
+  it declares a character it does not hold. Offline only: the client holds
+  every card in an online game too, and using that would be cheating.
+
+### End-of-game recap
+
+- The results screen renders `src/components/RecapCard.tsx`: winner, finish
+  order from `standings()` with each player's `stats.coinsGained`, and up
+  to three highlights chosen from `stats` (bluffs called, coins stolen,
+  times caught, cards taken). A game with none of those shows fewer lines
+  rather than zeros.
+- "Share result" rasterises that same view with `react-native-view-shot`
+  and hands the PNG to the OS share sheet (`expo-sharing`), so the shared
+  image is exactly what was on screen.
+
+### Table skins
+
+- `src/skins.ts` describes the table's surface only — rim colour, cloth
+  gradient, cloth edge, inner hairline — and nothing else may depend on
+  it. `felt` (crimson card room) and `majlis` (oxblood carpet, brass rim)
+  ship today; the picker lives in Settings › Play › Table.
 
 ## 10. UX contract
 
