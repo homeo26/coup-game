@@ -24,6 +24,7 @@ import {
   MoveResult,
   PendingAction,
   PlayerState,
+  PlayerStats,
   Resume,
   Role,
   ROLES,
@@ -58,6 +59,25 @@ function player(s: GameState, id: string): PlayerState {
 
 function alivePlayers(s: GameState): PlayerState[] {
   return s.players.filter(isAlive);
+}
+
+/** Bump one of a player's recap totals, creating the row on first use. */
+type StatCounter = Exclude<keyof PlayerStats, 'biggestSteal'>;
+
+function stat(s: GameState, id: string, key: keyof PlayerStats, by = 1) {
+  s.stats = s.stats ?? {};
+  const row = (s.stats[id] = s.stats[id] ?? {
+    coinsGained: 0,
+    stolen: 0,
+    biggestSteal: 0,
+    bluffsCalled: 0,
+    challengesLost: 0,
+    caughtBluffing: 0,
+    blocks: 0,
+    kills: 0,
+  });
+  if (key === 'biggestSteal') row.biggestSteal = Math.max(row.biggestSteal, by);
+  else row[key as StatCounter] += by;
 }
 
 function log(s: GameState, key: string, params?: LogEntry['params']) {
@@ -141,6 +161,21 @@ export function newGame(
     eliminated: [],
     timerSec,
     deadlineMs: timerSec > 0 ? nowMs + timerSec * 1000 : 0,
+    stats: Object.fromEntries(
+      players.map((p) => [
+        p.id,
+        {
+          coinsGained: 0,
+          stolen: 0,
+          biggestSteal: 0,
+          bluffsCalled: 0,
+          challengesLost: 0,
+          caughtBluffing: 0,
+          blocks: 0,
+          kills: 0,
+        },
+      ]),
+    ),
     log: [],
     version: 0,
   };
@@ -161,6 +196,7 @@ export function apply(
   s.eliminated = s.eliminated ?? []; // migrate pre-standings saves
   s.timerSec = s.timerSec ?? 0; // migrate pre-timer saves
   s.deadlineMs = s.deadlineMs ?? 0;
+  s.stats = s.stats ?? {}; // migrate pre-stats saves
   try {
     applyMove(s, playerId, move, nowMs);
   } catch (e) {
@@ -270,6 +306,7 @@ function declare(s: GameState, me: PlayerState, action: ActionType, target?: str
   switch (action) {
     case 'income':
       me.coins += 1;
+      stat(s, me.id, 'coinsGained', 1);
       log(s, 'logIncome', { a: me.name });
       endTurn(s);
       return;
@@ -283,6 +320,7 @@ function declare(s: GameState, me: PlayerState, action: ActionType, target?: str
     case 'coup':
       if (me.coins < 7) throw new Error('need 7 coins');
       me.coins -= 7;
+      stat(s, me.id, 'kills');
       log(s, 'logCoup', { a: me.name, b: tgt!.name });
       s.pending = mkPending(action, me.id, target);
       queueLoss(s, tgt!.id, 'end_turn');
@@ -350,6 +388,7 @@ function proceedAction(s: GameState) {
   switch (p.action) {
     case 'tax':
       actor.coins += 3;
+      stat(s, actor.id, 'coinsGained', 3);
       log(s, 'logTax', { a: actor.name });
       endTurn(s);
       return;
@@ -383,6 +422,7 @@ function resolveAction(s: GameState) {
   switch (p.action) {
     case 'foreign_aid':
       actor.coins += 2;
+      stat(s, actor.id, 'coinsGained', 2);
       log(s, 'logForeignAid', { a: actor.name });
       endTurn(s);
       return;
@@ -395,6 +435,9 @@ function resolveAction(s: GameState) {
       const n = Math.min(2, tgt.coins);
       tgt.coins -= n;
       actor.coins += n;
+      stat(s, actor.id, 'coinsGained', n);
+      stat(s, actor.id, 'stolen', n);
+      stat(s, actor.id, 'biggestSteal', n);
       log(s, 'logSteal', { a: actor.name, b: tgt.name, n });
       endTurn(s);
       return;
@@ -405,6 +448,7 @@ function resolveAction(s: GameState) {
         endTurn(s);
         return;
       }
+      stat(s, actor.id, 'kills');
       log(s, 'logAssassinate', { a: actor.name, b: tgt.name });
       queueLoss(s, tgt.id, 'end_turn');
       return;
@@ -417,6 +461,7 @@ function resolveAction(s: GameState) {
 /** The block stood — the action fails; coins paid remain spent. */
 function blockStands(s: GameState) {
   const p = s.pending!;
+  if (p.block) stat(s, p.block.blocker, 'blocks');
   if (p.action === 'foreign_aid') log(s, 'logForeignAidBlocked');
   else if (p.action === 'steal') log(s, 'logStealBlocked');
   else if (p.action === 'assassinate') log(s, 'logAssassinateBlocked');
@@ -449,11 +494,14 @@ function resolveActionChallenge(s: GameState, challengerId: string) {
   if (idx >= 0) {
     // Claim proven: challenger loses a card, actor swaps the shown card.
     swapProvenCard(s, actor, idx);
+    stat(s, challengerId, 'challengesLost');
     log(s, 'logChallengeFailed', { a: challenger.name, b: actor.name, r: p.claimedRole! });
     queueLoss(s, challengerId, 'proceed_action');
   } else {
     // Bluff caught: actor loses a card; the action fails and its cost
     // is refunded.
+    stat(s, challengerId, 'bluffsCalled');
+    stat(s, p.actor, 'caughtBluffing');
     log(s, 'logChallengeWon', { b: actor.name });
     if (p.action === 'assassinate') actor.coins += 3;
     queueLoss(s, p.actor, 'action_failed');
@@ -469,9 +517,12 @@ function resolveBlockChallenge(s: GameState, challengerId: string) {
   const idx = hasUnrevealed(blocker, p.block!.role);
   if (idx >= 0) {
     swapProvenCard(s, blocker, idx);
+    stat(s, challengerId, 'challengesLost');
     log(s, 'logChallengeFailed', { a: challenger.name, b: blocker.name, r: p.block!.role });
     queueLoss(s, challengerId, 'block_stands');
   } else {
+    stat(s, challengerId, 'bluffsCalled');
+    stat(s, p.block!.blocker, 'caughtBluffing');
     log(s, 'logChallengeWon', { b: blocker.name });
     queueLoss(s, p.block!.blocker, 'resolve_action');
   }

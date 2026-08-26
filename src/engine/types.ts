@@ -89,6 +89,30 @@ export interface LogEntry {
   params?: Record<string, string | number>;
 }
 
+/**
+ * What a player did over a whole game. Kept in the state rather than derived
+ * from the log, because the log is capped (LOG_CAP) and a long game would
+ * quietly lose its early events.
+ */
+export interface PlayerStats {
+  /** Coins collected through actions (income, foreign aid, tax, steal). */
+  coinsGained: number;
+  /** Coins taken off other players. */
+  stolen: number;
+  /** Largest single steal. */
+  biggestSteal: number;
+  /** Challenges this player made that were right — a bluff called. */
+  bluffsCalled: number;
+  /** Challenges this player made that were wrong. */
+  challengesLost: number;
+  /** Times this player was caught claiming a character they did not hold. */
+  caughtBluffing: number;
+  /** Blocks that stood (unchallenged, or challenged and proven). */
+  blocks: number;
+  /** Coups and assassinations that landed. */
+  kills: number;
+}
+
 export interface GameState {
   players: PlayerState[];
   deck: Role[];
@@ -105,6 +129,8 @@ export interface GameState {
   /** Absolute ms deadline for the decision now awaited. 0 = none. */
   deadlineMs: number;
   log: LogEntry[];
+  /** Per-player totals for the end-of-game recap, keyed by player id. */
+  stats: Record<string, PlayerStats>;
   /** Monotonic move counter (optimistic concurrency). */
   version: number;
 }

@@ -650,6 +650,50 @@ test('stealing from a broke player is legal and takes nothing', () => {
   eq(s.phase, 'action', 'turn ended cleanly');
 });
 
+test('recap stats: coins, steals, called bluffs and kills are tallied', () => {
+  let s = rig({ a: ['captain', 'duke'], b: ['contessa', 'ambassador'] }, ['assassin'], {
+    a: 2,
+    b: 5,
+  });
+  // a steals two from b with a real Captain, unchallenged
+  s = mv(s, 'a', { type: 'declare', action: 'steal', target: 'b' });
+  s = mv(s, 'b', { type: 'pass' });
+  s = mv(s, 'b', { type: 'pass' });
+  eq(s.stats.a.stolen, 2, 'the steal is recorded');
+  eq(s.stats.a.biggestSteal, 2, 'and remembered as the biggest');
+  eq(s.stats.a.coinsGained, 2, 'stolen coins count as gained');
+
+  // b takes income
+  s = mv(s, 'b', { type: 'declare', action: 'income' });
+  eq(s.stats.b.coinsGained, 1, 'income counts one coin');
+
+  // a claims the Duke it holds and is challenged: the challenger is wrong
+  s = mv(s, 'a', { type: 'declare', action: 'tax' });
+  s = mv(s, 'b', { type: 'challenge' });
+  eq(s.stats.b.challengesLost, 1, 'a wrong challenge is recorded');
+  eq(s.stats.a.caughtBluffing, 0, 'the Duke was real, so no bluff was caught');
+});
+
+test('recap stats: a caught bluff is charged to both sides', () => {
+  let s = rig({ a: ['captain', 'captain'], b: ['contessa', 'ambassador'] }, ['duke'], {
+    a: 2,
+    b: 2,
+  });
+  s = mv(s, 'a', { type: 'declare', action: 'tax' }); // a has no Duke
+  s = mv(s, 'b', { type: 'challenge' });
+  eq(s.stats.b.bluffsCalled, 1, 'the challenger called a bluff');
+  eq(s.stats.a.caughtBluffing, 1, 'and the bluffer is on record');
+  eq(s.stats.b.challengesLost, 0, 'the challenge was not lost');
+});
+
+test('recap stats survive a state that predates them', () => {
+  const s = rig({ a: ['duke', 'duke'], b: ['contessa', 'contessa'] }, ['captain']);
+  // a room saved before stats existed has no `stats` key at all
+  delete (s as { stats?: unknown }).stats;
+  const next = mv(s, 'a', { type: 'declare', action: 'income' });
+  eq(next.stats.a.coinsGained, 1, 'the missing block is rebuilt on first use');
+});
+
 /* ------------------------------------------------------------------ */
 
 console.log(`\n${passed} assertions passed, ${failed} failed`);

@@ -68,7 +68,8 @@
         }
       ],
       "expo-splash-screen",
-      "expo-audio"
+      "expo-audio",
+      "expo-sharing"
     ]
   }
 }

@@ -45,7 +45,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Theme, font, latinFont, roleColors, useStyles, useTheme } from '../theme';
+import ViewShot, { type ViewShotRef } from 'react-native-view-shot';
 import { skinOf } from '../skins';
+import * as Sharing from 'expo-sharing';
+import { RecapCard } from '../components/RecapCard';
 import { Pressy } from '../components/Pressy';
 import { Hourglass } from '../components/Hourglass';
 import { InfluenceCard } from '../components/InfluenceCard';
@@ -1274,6 +1277,31 @@ export function GameScreen() {
     dispatch({ type: 'declare', action, ...(target ? { target } : {}) });
   };
 
+  const recapRef = useRef<ViewShotRef | null>(null);
+  const [sharing, setSharing] = useState(false);
+  /**
+   * Rasterise the recap card and hand it to the OS share sheet. The capture is
+   * of the card the player is looking at, so there is no second layout to keep
+   * in step.
+   */
+  const shareRecap = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      haptics.light();
+      sound.play('select');
+      const uri = await recapRef.current?.capture();
+      if (!uri) throw new Error('capture failed');
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: t('shareRecap') });
+      }
+    } catch {
+      setNotice({ icon: 'image-outline', title: t('appName'), body: t('shareFailed') });
+    } finally {
+      setSharing(false);
+    }
+  };
+
   const onLeave = () => {
     setNotice({
       icon: 'exit-outline',
@@ -2156,54 +2184,28 @@ export function GameScreen() {
             exiting={FadeOut.duration(220)}
             style={styles.winCard}
           >
-            <Ionicons name="trophy" size={44} color={theme.colors.gold} />
             <Text style={styles.winTitle}>
               {winner.id === me.id ? t('youWin') : t('winnerIs', { name: winner.name })}
             </Text>
-            <View style={styles.standings}>
-              {standings(g).map((p, i) => {
-                const medal =
-                  i === 0 ? '#e8c766' : i === 1 ? '#b8c0cc' : i === 2 ? '#c98a4b' : null;
-                return (
-                  <Animated.View
-                    key={p.id}
-                    entering={FadeInDown.duration(300).delay(200 + i * 90)}
-                    style={[
-                      styles.standingRow,
-                      rtl && styles.rowReverse,
-                      i === 0 && styles.standingWinner,
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.rankBadge,
-                        medal ? { borderColor: medal, backgroundColor: medal + '22' } : null,
-                      ]}
-                    >
-                      {i === 0 ? (
-                        <Ionicons name="trophy" size={13} color={medal!} />
-                      ) : (
-                        <Text style={[styles.rankText, medal ? { color: medal } : null]}>
-                          {i + 1}
-                        </Text>
-                      )}
-                    </View>
-                    <Avatar id={avatarOf(p.id)} size={26} ring={1.5} />
-                    <Text
-                      style={[
-                        styles.standingName,
-                        rtl && styles.rtlText,
-                        i === 0 && { color: theme.colors.goldLight },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {p.name}
-                      {p.id === me.id ? `  (${t('you')})` : ''}
-                    </Text>
-                  </Animated.View>
-                );
-              })}
-            </View>
+            {/* the card the players see IS the card that gets shared */}
+            <ViewShot ref={recapRef} options={{ format: 'png', quality: 1 }}>
+              <RecapCard
+                g={g}
+                meId={me.id}
+                avatarOf={avatarOf}
+                skinId={skinId}
+                code={isLocal ? undefined : room!.code}
+              />
+            </ViewShot>
+            <Pressy
+              scaleTo={0.95}
+              disabled={sharing}
+              style={[styles.neutralBtn, styles.shareBtn]}
+              onPress={shareRecap}
+            >
+              <Ionicons name="share-outline" size={17} color={theme.colors.ink} />
+              <Text style={styles.neutralBtnText}>{t('shareRecap')}</Text>
+            </Pressy>
             {room!.hostId === me.id ? (
               <Pressy scaleTo={0.95} style={styles.goldBtn} onPress={() => again()}>
                 <Text style={styles.goldBtnText}>{t('playAgain')}</Text>
@@ -3202,6 +3204,12 @@ const makeStyles = (theme: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
       padding: 28,
+    },
+    shareBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
     },
     winCard: {
       alignSelf: 'stretch',

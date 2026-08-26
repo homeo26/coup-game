@@ -373,6 +373,16 @@ export const dict = {
   optLetItDesc: { en: 'The {action} goes through.', ar: 'يمضي {action}.' },
   optAcceptBlockTitle: { en: 'Accept the block', ar: 'اقبل الصدّ' },
   optAcceptBlockDesc: { en: 'The {action} is stopped.', ar: 'يتوقف {action}.' },
+  // End-of-game recap card
+  recapWins: { en: 'takes the table', ar: 'يفوز بالطاولة' },
+  recapBluffsCalled: { en: '{name} called {n} bluffs', ar: '{name} كشف {n} خدعة' },
+  recapStolen: { en: '{name} stole {n} coins', ar: '{name} سرق {n} عملة' },
+  recapCaught: { en: '{name} was caught {n} times', ar: '{name} انكشف {n} مرة' },
+  recapKills: { en: '{name} took {n} cards', ar: '{name} أسقط {n} بطاقة' },
+  recapFooter: { en: 'COUP · PLAYED ON A PHONE', ar: 'كوب · لعبة على الهاتف' },
+  offlineTable: { en: 'vs bots', ar: 'ضد الروبوتات' },
+  shareRecap: { en: 'Share result', ar: 'شارك النتيجة' },
+  shareFailed: { en: 'Could not share the card', ar: 'تعذّرت مشاركة البطاقة' },
   tableSkinSetting: { en: 'Table', ar: 'الطاولة' },
   tableSkinDesc: {
     en: 'What the table is made of — cloth and rim only',
